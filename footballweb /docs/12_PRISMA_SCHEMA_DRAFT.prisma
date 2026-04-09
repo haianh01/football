@@ -1,0 +1,973 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Draft schema converted from 11_DATABASE_SCHEMA.md.
+/// Notes:
+/// - This file prioritizes domain consistency and reviewability.
+/// - Some business constraints still need to be enforced in service logic or SQL migrations.
+/// - JSON defaults use dbgenerated() because they will likely map to jsonb defaults in PostgreSQL.
+
+model User {
+  id               String     @id @default(uuid()) @db.Uuid
+  phone            String?    @unique @db.VarChar(32)
+  email            String?    @unique @db.VarChar(255)
+  display_name     String     @db.VarChar(120)
+  avatar_url       String?
+  country_code     String     @default("VN") @db.VarChar(2)
+  timezone         String     @default("Asia/Ho_Chi_Minh") @db.VarChar(64)
+  preferred_locale String     @default("vi-VN") @db.VarChar(16)
+  status           UserStatus @default(active)
+  created_at       DateTime   @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime   @updatedAt @db.Timestamptz(6)
+
+  user_identities               UserIdentity[]
+  user_preferences              UserPreference?
+  player_profile                PlayerProfile?
+  team_members                  TeamMember[]
+  created_teams                 Team[]             @relation("team_created_by")
+  target_user_team_invites      TeamInvite[]       @relation("team_invite_target_user")
+  created_team_invites          TeamInvite[]       @relation("team_invite_created_by")
+  created_match_posts           MatchPost[]        @relation("match_post_created_by")
+  created_match_invitations     MatchInvitation[]  @relation("match_invitation_created_by")
+  created_matches               Match[]            @relation("match_created_by")
+  match_participants            MatchParticipant[]
+  created_player_request_posts  PlayerRequestPost[] @relation("player_request_post_created_by")
+  player_applications           PlayerApplication[] @relation("player_application_user")
+  authored_reviews              Review[]           @relation("review_reviewer")
+  target_user_reviews           Review[]           @relation("review_target_user")
+  user_reputation_snapshots     ReputationSnapshot[] @relation("reputation_snapshot_target_user")
+  created_polls                 Poll[]             @relation("poll_created_by")
+  poll_votes                    PollVote[]
+  created_team_fees             TeamFee[]          @relation("team_fee_created_by")
+  team_fee_assignees            TeamFeeAssignee[]
+  payment_records               PaymentRecord[]    @relation("payment_record_user")
+  confirmed_payment_records     PaymentRecord[]    @relation("payment_record_confirmed_by")
+  notifications                 Notification[]
+  audit_logs                    AuditLog[]         @relation("audit_log_actor")
+  created_settlement_exports    SettlementExport[] @relation("settlement_export_created_by")
+  orders                        Order[]
+
+  @@map("users")
+}
+
+model UserIdentity {
+  id               String           @id @default(uuid()) @db.Uuid
+  user_id          String           @db.Uuid
+  provider         IdentityProvider
+  provider_subject String           @db.VarChar(255)
+  created_at       DateTime         @default(now()) @db.Timestamptz(6)
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([provider, provider_subject])
+  @@map("user_identities")
+}
+
+model UserPreference {
+  user_id                String   @id @db.Uuid
+  spoken_languages       Json     @default(dbgenerated("'[]'::jsonb")) @db.JsonB
+  notification_settings  Json     @default(dbgenerated("'{}'::jsonb")) @db.JsonB
+  marketing_opt_in       Boolean  @default(false)
+  created_at             DateTime @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime @updatedAt @db.Timestamptz(6)
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("user_preferences")
+}
+
+model Team {
+  id                 String         @id @default(uuid()) @db.Uuid
+  name               String         @db.VarChar(120)
+  slug               String         @unique @db.VarChar(140)
+  short_code         String         @unique @db.VarChar(40)
+  logo_url           String?
+  description        String?
+  home_country_code  String         @default("VN") @db.VarChar(2)
+  home_state_code    String?        @db.VarChar(64)
+  home_city_code     String?        @db.VarChar(64)
+  home_district_code String?        @db.VarChar(64)
+  default_locale     String         @default("vi-VN") @db.VarChar(16)
+  skill_level_code   SkillLevelCode
+  play_style_code    String?        @db.VarChar(64)
+  primary_color      String?        @db.VarChar(32)
+  secondary_color    String?        @db.VarChar(32)
+  status             TeamStatus     @default(active)
+  created_by         String         @db.Uuid
+  created_at         DateTime       @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime       @updatedAt @db.Timestamptz(6)
+
+  created_by_user            User                @relation("team_created_by", fields: [created_by], references: [id], onDelete: Restrict)
+  team_members               TeamMember[]
+  team_invites               TeamInvite[]
+  match_posts                MatchPost[]
+  match_invitations_from     MatchInvitation[]   @relation("match_invitation_from_team")
+  match_invitations_to       MatchInvitation[]   @relation("match_invitation_to_team")
+  home_matches               Match[]             @relation("match_home_team")
+  away_matches               Match[]             @relation("match_away_team")
+  match_participants         MatchParticipant[]
+  player_request_posts       PlayerRequestPost[]
+  target_team_reviews        Review[]            @relation("review_target_team")
+  team_reputation_snapshots  ReputationSnapshot[] @relation("reputation_snapshot_target_team")
+  polls                      Poll[]
+  team_fees                  TeamFee[]
+  settlement_exports         SettlementExport[]
+  orders                     Order[]
+
+  @@index([home_city_code, skill_level_code], map: "idx_teams_city_skill")
+  @@map("teams")
+}
+
+model TeamMember {
+  id                        String           @id @default(uuid()) @db.Uuid
+  team_id                   String           @db.Uuid
+  user_id                   String           @db.Uuid
+  role                      TeamRole         @default(member)
+  shirt_number              Int?
+  primary_position_code     PositionCode?
+  secondary_position_codes  Json             @default(dbgenerated("'[]'::jsonb")) @db.JsonB
+  joined_at                 DateTime         @db.Timestamptz(6)
+  status                    TeamMemberStatus @default(active)
+  attendance_rate           Decimal          @default(0) @db.Decimal(5, 2)
+  current_debt_amount_minor BigInt           @default(0)
+  currency_code             String           @default("VND") @db.VarChar(3)
+  created_at                DateTime         @default(now()) @db.Timestamptz(6)
+  updated_at                DateTime         @updatedAt @db.Timestamptz(6)
+
+  team Team @relation(fields: [team_id], references: [id], onDelete: Cascade)
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([team_id, user_id])
+  @@index([team_id, role], map: "idx_team_members_team_role")
+  @@map("team_members")
+}
+
+model TeamInvite {
+  id             String       @id @default(uuid()) @db.Uuid
+  team_id        String       @db.Uuid
+  invite_type    InviteType
+  target_user_id String?      @db.Uuid
+  target_phone   String?      @db.VarChar(32)
+  invite_code    String       @unique @db.VarChar(80)
+  status         InviteStatus @default(pending)
+  expires_at     DateTime     @db.Timestamptz(6)
+  created_by     String       @db.Uuid
+  created_at     DateTime     @default(now()) @db.Timestamptz(6)
+
+  team              Team  @relation(fields: [team_id], references: [id], onDelete: Cascade)
+  target_user       User? @relation("team_invite_target_user", fields: [target_user_id], references: [id], onDelete: SetNull)
+  created_by_user   User  @relation("team_invite_created_by", fields: [created_by], references: [id], onDelete: Restrict)
+
+  @@map("team_invites")
+}
+
+model PlayerProfile {
+  id                    String         @id @default(uuid()) @db.Uuid
+  user_id               String         @unique @db.Uuid
+  headline              String?        @db.VarChar(160)
+  bio                   String?
+  skill_level_code      SkillLevelCode
+  strong_foot           StrongFoot?
+  primary_positions     Json           @default(dbgenerated("'[]'::jsonb")) @db.JsonB
+  secondary_positions   Json           @default(dbgenerated("'[]'::jsonb")) @db.JsonB
+  preferred_city_code   String?        @db.VarChar(64)
+  preferred_district_code String?      @db.VarChar(64)
+  available_slots       Json           @default(dbgenerated("'[]'::jsonb")) @db.JsonB
+  spoken_languages      Json           @default(dbgenerated("'[]'::jsonb")) @db.JsonB
+  reputation_score      Decimal        @default(0) @db.Decimal(5, 2)
+  attendance_rate       Decimal        @default(0) @db.Decimal(5, 2)
+  created_at            DateTime       @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime       @updatedAt @db.Timestamptz(6)
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([preferred_city_code, skill_level_code], map: "idx_player_profiles_city_skill")
+  @@map("player_profiles")
+}
+
+model MatchPost {
+  id               String          @id @default(uuid()) @db.Uuid
+  team_id          String          @db.Uuid
+  title            String?         @db.VarChar(160)
+  match_type       MatchType       @default(friendly)
+  status           MatchPostStatus @default(open)
+  urgency          UrgencyLevel    @default(normal)
+  date             DateTime        @db.Date
+  start_time       DateTime        @db.Time(6)
+  end_time         DateTime?       @db.Time(6)
+  timezone         String          @db.VarChar(64)
+  country_code     String          @db.VarChar(2)
+  state_code       String?         @db.VarChar(64)
+  city_code        String?         @db.VarChar(64)
+  district_code    String?         @db.VarChar(64)
+  venue_name       String?         @db.VarChar(160)
+  venue_address    String?
+  field_type       FieldType
+  team_skill_min   SkillLevelCode
+  team_skill_max   SkillLevelCode
+  pitch_fee_rule   PitchFeeRule
+  support_note     String?         @db.VarChar(160)
+  currency_code    String          @default("VND") @db.VarChar(3)
+  note             String?
+  expires_at       DateTime?       @db.Timestamptz(6)
+  created_by       String          @db.Uuid
+  created_at       DateTime        @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime        @updatedAt @db.Timestamptz(6)
+
+  team                 Team              @relation(fields: [team_id], references: [id], onDelete: Restrict)
+  created_by_user      User              @relation("match_post_created_by", fields: [created_by], references: [id], onDelete: Restrict)
+  match_invitations    MatchInvitation[]
+  source_matches       Match[]
+
+  @@index([status, city_code, date, field_type], map: "idx_match_posts_discovery")
+  @@index([team_skill_min, team_skill_max], map: "idx_match_posts_skill")
+  @@map("match_posts")
+}
+
+model MatchInvitation {
+  id            String           @id @default(uuid()) @db.Uuid
+  match_post_id String           @db.Uuid
+  from_team_id  String           @db.Uuid
+  to_team_id    String           @db.Uuid
+  message       String?
+  status        InvitationStatus @default(sent)
+  created_by    String           @db.Uuid
+  created_at    DateTime         @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime         @updatedAt @db.Timestamptz(6)
+
+  match_post        MatchPost @relation(fields: [match_post_id], references: [id], onDelete: Cascade)
+  from_team         Team      @relation("match_invitation_from_team", fields: [from_team_id], references: [id], onDelete: Restrict)
+  to_team           Team      @relation("match_invitation_to_team", fields: [to_team_id], references: [id], onDelete: Restrict)
+  created_by_user   User      @relation("match_invitation_created_by", fields: [created_by], references: [id], onDelete: Restrict)
+
+  @@map("match_invitations")
+}
+
+model Match {
+  id                   String       @id @default(uuid()) @db.Uuid
+  source_match_post_id String?      @db.Uuid
+  home_team_id         String?      @db.Uuid
+  away_team_id         String?      @db.Uuid
+  match_type           MatchType    @default(friendly)
+  status               MatchStatus  @default(scheduled)
+  date                 DateTime     @db.Date
+  start_time           DateTime     @db.Time(6)
+  end_time             DateTime?    @db.Time(6)
+  timezone             String       @db.VarChar(64)
+  country_code         String       @db.VarChar(2)
+  state_code           String?      @db.VarChar(64)
+  city_code            String?      @db.VarChar(64)
+  district_code        String?      @db.VarChar(64)
+  venue_name           String?      @db.VarChar(160)
+  venue_address        String?
+  field_type           FieldType
+  currency_code        String       @default("VND") @db.VarChar(3)
+  created_by           String       @db.Uuid
+  created_at           DateTime     @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime     @updatedAt @db.Timestamptz(6)
+
+  source_match_post    MatchPost?          @relation(fields: [source_match_post_id], references: [id], onDelete: SetNull)
+  home_team            Team?               @relation("match_home_team", fields: [home_team_id], references: [id], onDelete: SetNull)
+  away_team            Team?               @relation("match_away_team", fields: [away_team_id], references: [id], onDelete: SetNull)
+  created_by_user      User                @relation("match_created_by", fields: [created_by], references: [id], onDelete: Restrict)
+  match_participants   MatchParticipant[]
+  player_request_posts PlayerRequestPost[]
+  polls                Poll[]
+  team_fees            TeamFee[]
+  reviews              Review[]
+
+  @@index([home_team_id, date], map: "idx_matches_team_date")
+  @@index([status, date], map: "idx_matches_status_date")
+  @@map("matches")
+}
+
+model MatchParticipant {
+  id                String                @id @default(uuid()) @db.Uuid
+  match_id          String                @db.Uuid
+  user_id           String                @db.Uuid
+  team_id           String?               @db.Uuid
+  source_type       ParticipantSourceType
+  role              ParticipantRole       @default(player)
+  attendance_status AttendanceStatus      @default(invited)
+  position_code     PositionCode?
+  created_at        DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime              @updatedAt @db.Timestamptz(6)
+
+  match Match @relation(fields: [match_id], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  team  Team? @relation(fields: [team_id], references: [id], onDelete: SetNull)
+
+  @@unique([match_id, user_id])
+  @@map("match_participants")
+}
+
+model PlayerRequestPost {
+  id                       String                 @id @default(uuid()) @db.Uuid
+  team_id                  String                 @db.Uuid
+  match_id                 String?                @db.Uuid
+  title                    String?                @db.VarChar(160)
+  status                   PlayerRequestStatus    @default(open)
+  urgency                  UrgencyLevel           @default(normal)
+  date                     DateTime               @db.Date
+  start_time               DateTime               @db.Time(6)
+  timezone                 String                 @db.VarChar(64)
+  city_code                String?                @db.VarChar(64)
+  district_code            String?                @db.VarChar(64)
+  venue_name               String?                @db.VarChar(160)
+  field_type               FieldType
+  positions_needed         Json                   @default(dbgenerated("'[]'::jsonb")) @db.JsonB
+  quantity                 Int
+  skill_level_min          SkillLevelCode?
+  skill_level_max          SkillLevelCode?
+  support_fee_amount_minor BigInt                 @default(0)
+  currency_code            String                 @default("VND") @db.VarChar(3)
+  dress_note               String?                @db.VarChar(160)
+  note                     String?
+  created_by               String                 @db.Uuid
+  created_at               DateTime               @default(now()) @db.Timestamptz(6)
+  updated_at               DateTime               @updatedAt @db.Timestamptz(6)
+
+  team                Team                @relation(fields: [team_id], references: [id], onDelete: Restrict)
+  match               Match?              @relation(fields: [match_id], references: [id], onDelete: SetNull)
+  created_by_user     User                @relation("player_request_post_created_by", fields: [created_by], references: [id], onDelete: Restrict)
+  player_applications PlayerApplication[]
+
+  @@index([status, city_code, date], map: "idx_player_request_posts_discovery")
+  @@map("player_request_posts")
+}
+
+model PlayerApplication {
+  id                     String                  @id @default(uuid()) @db.Uuid
+  player_request_post_id String                  @db.Uuid
+  player_user_id         String                  @db.Uuid
+  message                String?
+  status                 PlayerApplicationStatus @default(applied)
+  created_at             DateTime                @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime                @updatedAt @db.Timestamptz(6)
+
+  player_request_post PlayerRequestPost @relation(fields: [player_request_post_id], references: [id], onDelete: Cascade)
+  player_user         User              @relation("player_application_user", fields: [player_user_id], references: [id], onDelete: Cascade)
+
+  @@unique([player_request_post_id, player_user_id])
+  @@map("player_applications")
+}
+
+model Review {
+  id                String           @id @default(uuid()) @db.Uuid
+  match_id          String           @db.Uuid
+  reviewer_user_id  String           @db.Uuid
+  target_type       ReviewTargetType
+  target_team_id    String?          @db.Uuid
+  target_user_id    String?          @db.Uuid
+  rating            Decimal          @db.Decimal(3, 2)
+  punctuality_score Decimal?         @db.Decimal(3, 2)
+  attitude_score    Decimal?         @db.Decimal(3, 2)
+  fair_play_score   Decimal?         @db.Decimal(3, 2)
+  level_fit_score   Decimal?         @db.Decimal(3, 2)
+  note              String?
+  status            ReviewStatus     @default(published)
+  created_at        DateTime         @default(now()) @db.Timestamptz(6)
+
+  match          Match  @relation(fields: [match_id], references: [id], onDelete: Restrict)
+  reviewer_user  User   @relation("review_reviewer", fields: [reviewer_user_id], references: [id], onDelete: Restrict)
+  target_team    Team?  @relation("review_target_team", fields: [target_team_id], references: [id], onDelete: SetNull)
+  target_user    User?  @relation("review_target_user", fields: [target_user_id], references: [id], onDelete: SetNull)
+
+  @@index([match_id])
+  @@index([target_type, target_team_id])
+  @@index([target_type, target_user_id])
+  @@map("reviews")
+}
+
+model ReputationSnapshot {
+  id                     String           @id @default(uuid()) @db.Uuid
+  target_type            ReviewTargetType
+  target_team_id         String?          @db.Uuid
+  target_user_id         String?          @db.Uuid
+  reputation_score       Decimal          @default(0) @db.Decimal(5, 2)
+  reliability_score      Decimal          @default(0) @db.Decimal(5, 2)
+  punctuality_score      Decimal          @default(0) @db.Decimal(5, 2)
+  cancellation_rate      Decimal          @default(0) @db.Decimal(5, 2)
+  total_verified_matches Int              @default(0)
+  updated_at             DateTime         @updatedAt @db.Timestamptz(6)
+
+  target_team Team? @relation("reputation_snapshot_target_team", fields: [target_team_id], references: [id], onDelete: SetNull)
+  target_user User? @relation("reputation_snapshot_target_user", fields: [target_user_id], references: [id], onDelete: SetNull)
+
+  @@index([target_type, target_team_id])
+  @@index([target_type, target_user_id])
+  @@map("reputation_snapshots")
+}
+
+model Poll {
+  id                String               @id @default(uuid()) @db.Uuid
+  team_id           String               @db.Uuid
+  match_id          String?              @db.Uuid
+  type              PollType
+  title             String               @db.VarChar(160)
+  description       String?
+  audience_type     PollAudienceType
+  audience_snapshot Json                 @default(dbgenerated("'[]'::jsonb")) @db.JsonB
+  result_visibility PollResultVisibility @default(after_deadline)
+  allow_edit        Boolean              @default(false)
+  require_note      Boolean              @default(false)
+  deadline_at       DateTime             @db.Timestamptz(6)
+  status            PollStatus           @default(open)
+  created_by        String               @db.Uuid
+  created_at        DateTime             @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime             @updatedAt @db.Timestamptz(6)
+
+  team              Team         @relation(fields: [team_id], references: [id], onDelete: Cascade)
+  match             Match?       @relation(fields: [match_id], references: [id], onDelete: SetNull)
+  created_by_user   User         @relation("poll_created_by", fields: [created_by], references: [id], onDelete: Restrict)
+  poll_options      PollOption[]
+  poll_votes        PollVote[]
+  source_team_fees  TeamFee[]
+
+  @@index([team_id, status, deadline_at], map: "idx_polls_team_status_deadline")
+  @@map("polls")
+}
+
+model PollOption {
+  id          String   @id @default(uuid()) @db.Uuid
+  poll_id     String   @db.Uuid
+  label_code  String?  @db.VarChar(80)
+  label_text  String   @db.VarChar(160)
+  sort_order  Int
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+
+  poll       Poll       @relation(fields: [poll_id], references: [id], onDelete: Cascade)
+  poll_votes PollVote[]
+
+  @@map("poll_options")
+}
+
+model PollVote {
+  id          String   @id @default(uuid()) @db.Uuid
+  poll_id     String   @db.Uuid
+  option_id   String   @db.Uuid
+  user_id     String   @db.Uuid
+  note        String?
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime @updatedAt @db.Timestamptz(6)
+
+  poll    Poll       @relation(fields: [poll_id], references: [id], onDelete: Cascade)
+  option  PollOption @relation(fields: [option_id], references: [id], onDelete: Cascade)
+  user    User       @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([poll_id, user_id, option_id])
+  @@map("poll_votes")
+}
+
+model TeamFee {
+  id                  String              @id @default(uuid()) @db.Uuid
+  team_id             String              @db.Uuid
+  source_poll_id      String?             @db.Uuid
+  match_id            String?             @db.Uuid
+  title               String              @db.VarChar(160)
+  description         String?
+  fee_type            FeeType
+  distribution_type   FeeDistributionType
+  currency_code       String              @default("VND") @db.VarChar(3)
+  total_amount_minor  BigInt
+  due_at              DateTime            @db.Timestamptz(6)
+  status              TeamFeeStatus       @default(open)
+  created_by          String              @db.Uuid
+  created_at          DateTime            @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime            @updatedAt @db.Timestamptz(6)
+
+  team               Team              @relation(fields: [team_id], references: [id], onDelete: Cascade)
+  source_poll        Poll?             @relation(fields: [source_poll_id], references: [id], onDelete: SetNull)
+  match              Match?            @relation(fields: [match_id], references: [id], onDelete: SetNull)
+  created_by_user    User              @relation("team_fee_created_by", fields: [created_by], references: [id], onDelete: Restrict)
+  team_fee_assignees TeamFeeAssignee[]
+  payment_records    PaymentRecord[]
+
+  @@index([team_id, status, due_at], map: "idx_team_fees_team_status_due")
+  @@map("team_fees")
+}
+
+model TeamFeeAssignee {
+  id                String        @id @default(uuid()) @db.Uuid
+  team_fee_id       String        @db.Uuid
+  user_id           String        @db.Uuid
+  amount_due_minor  BigInt
+  amount_paid_minor BigInt        @default(0)
+  payment_status    PaymentStatus @default(pending)
+  paid_at           DateTime?     @db.Timestamptz(6)
+  waived_reason     String?
+  created_at        DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime      @updatedAt @db.Timestamptz(6)
+
+  team_fee TeamFee @relation(fields: [team_fee_id], references: [id], onDelete: Cascade)
+  user     User    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([team_fee_id, user_id])
+  @@index([user_id, payment_status], map: "idx_team_fee_assignees_user_status")
+  @@map("team_fee_assignees")
+}
+
+model PaymentRecord {
+  id              String              @id @default(uuid()) @db.Uuid
+  team_fee_id     String              @db.Uuid
+  user_id         String              @db.Uuid
+  amount_minor    BigInt
+  currency_code   String              @default("VND") @db.VarChar(3)
+  method          PaymentMethod
+  status          PaymentRecordStatus @default(confirmed)
+  reference_code  String?             @db.VarChar(120)
+  proof_file_url  String?
+  confirmed_by    String?             @db.Uuid
+  note            String?
+  paid_at         DateTime            @db.Timestamptz(6)
+  created_at      DateTime            @default(now()) @db.Timestamptz(6)
+
+  team_fee          TeamFee @relation(fields: [team_fee_id], references: [id], onDelete: Cascade)
+  user              User    @relation("payment_record_user", fields: [user_id], references: [id], onDelete: Restrict)
+  confirmed_by_user User?   @relation("payment_record_confirmed_by", fields: [confirmed_by], references: [id], onDelete: SetNull)
+
+  @@map("payment_records")
+}
+
+model Notification {
+  id                  String                @id @default(uuid()) @db.Uuid
+  user_id             String                @db.Uuid
+  type                NotificationType
+  priority            NotificationPriority  @default(medium)
+  title               String                @db.VarChar(200)
+  body                String
+  related_entity_type String?               @db.VarChar(80)
+  related_entity_id   String?               @db.Uuid
+  is_read             Boolean               @default(false)
+  read_at             DateTime?             @db.Timestamptz(6)
+  created_at          DateTime              @default(now()) @db.Timestamptz(6)
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id, created_at], map: "idx_notifications_user_created")
+  @@map("notifications")
+}
+
+model ReminderJob {
+  id            String         @id @default(uuid()) @db.Uuid
+  target_type   ReminderTargetType
+  target_id     String         @db.Uuid
+  reminder_type ReminderType
+  scheduled_at  DateTime       @db.Timestamptz(6)
+  status        ReminderStatus @default(pending)
+  attempt_count Int            @default(0)
+  created_at    DateTime       @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime       @updatedAt @db.Timestamptz(6)
+
+  @@map("reminder_jobs")
+}
+
+model AuditLog {
+  id            String   @id @default(uuid()) @db.Uuid
+  actor_user_id String?  @db.Uuid
+  action        String   @db.VarChar(120)
+  entity_type   String   @db.VarChar(80)
+  entity_id     String   @db.Uuid
+  metadata      Json     @default(dbgenerated("'{}'::jsonb")) @db.JsonB
+  created_at    DateTime @default(now()) @db.Timestamptz(6)
+
+  actor_user User? @relation("audit_log_actor", fields: [actor_user_id], references: [id], onDelete: SetNull)
+
+  @@map("audit_logs")
+}
+
+model SettlementExport {
+  id          String       @id @default(uuid()) @db.Uuid
+  team_id     String       @db.Uuid
+  period_month String      @db.VarChar(7)
+  format      ExportFormat @default(xlsx)
+  file_url    String
+  status      ExportStatus @default(ready)
+  created_by  String       @db.Uuid
+  created_at  DateTime     @default(now()) @db.Timestamptz(6)
+
+  team            Team @relation(fields: [team_id], references: [id], onDelete: Cascade)
+  created_by_user User @relation("settlement_export_created_by", fields: [created_by], references: [id], onDelete: Restrict)
+
+  @@map("settlement_exports")
+}
+
+model Product {
+  id                     String        @id @default(uuid()) @db.Uuid
+  name                   String        @db.VarChar(160)
+  slug                   String        @unique @db.VarChar(180)
+  description            String?
+  category_code          String        @db.VarChar(80)
+  status                 ProductStatus @default(active)
+  currency_code          String        @default("VND") @db.VarChar(3)
+  base_price_minor       BigInt
+  compare_at_price_minor BigInt?
+  primary_image_url      String?
+  stock_quantity         Int           @default(0)
+  created_at             DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime      @updatedAt @db.Timestamptz(6)
+
+  product_variants ProductVariant[]
+  order_items      OrderItem[]
+
+  @@map("products")
+}
+
+model ProductVariant {
+  id             String   @id @default(uuid()) @db.Uuid
+  product_id     String   @db.Uuid
+  sku            String   @unique @db.VarChar(80)
+  attributes     Json     @default(dbgenerated("'{}'::jsonb")) @db.JsonB
+  price_minor    BigInt
+  stock_quantity Int      @default(0)
+  created_at     DateTime @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime @updatedAt @db.Timestamptz(6)
+
+  product     Product     @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  order_items OrderItem[]
+
+  @@map("product_variants")
+}
+
+model Order {
+  id             String      @id @default(uuid()) @db.Uuid
+  user_id        String      @db.Uuid
+  team_id        String?     @db.Uuid
+  currency_code  String      @default("VND") @db.VarChar(3)
+  subtotal_minor BigInt
+  discount_minor BigInt      @default(0)
+  total_minor    BigInt
+  status         OrderStatus @default(pending)
+  created_at     DateTime    @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime    @updatedAt @db.Timestamptz(6)
+
+  user        User       @relation(fields: [user_id], references: [id], onDelete: Restrict)
+  team        Team?      @relation(fields: [team_id], references: [id], onDelete: SetNull)
+  order_items OrderItem[]
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id                 String   @id @default(uuid()) @db.Uuid
+  order_id           String   @db.Uuid
+  product_id         String   @db.Uuid
+  product_variant_id String?  @db.Uuid
+  quantity           Int
+  unit_price_minor   BigInt
+  line_total_minor   BigInt
+  created_at         DateTime @default(now()) @db.Timestamptz(6)
+
+  order           Order           @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  product         Product         @relation(fields: [product_id], references: [id], onDelete: Restrict)
+  product_variant ProductVariant? @relation(fields: [product_variant_id], references: [id], onDelete: SetNull)
+
+  @@map("order_items")
+}
+
+enum UserStatus {
+  active
+  suspended
+  deleted
+}
+
+enum IdentityProvider {
+  phone_otp
+  google
+  email
+}
+
+enum TeamStatus {
+  active
+  archived
+  suspended
+}
+
+enum TeamRole {
+  captain
+  vice_captain
+  treasurer
+  member
+}
+
+enum TeamMemberStatus {
+  active
+  invited
+  pending_approval
+  inactive
+  removed
+}
+
+enum InviteType {
+  link
+  code
+  phone
+  user
+}
+
+enum InviteStatus {
+  pending
+  accepted
+  expired
+  revoked
+}
+
+enum SkillLevelCode {
+  L1_CASUAL
+  L2_RECREATIONAL
+  L3_INTERMEDIATE
+  L4_ADVANCED
+  L5_COMPETITIVE
+}
+
+enum PositionCode {
+  GK
+  CB
+  LB
+  RB
+  DM
+  CM
+  AM
+  LW
+  RW
+  ST
+}
+
+enum StrongFoot {
+  left
+  right
+  both
+}
+
+enum MatchType {
+  friendly
+  scrim
+  tournament
+}
+
+enum FieldType {
+  five_v_five      @map("5v5")
+  seven_v_seven    @map("7v7")
+  eleven_v_eleven  @map("11v11")
+}
+
+enum UrgencyLevel {
+  normal
+  high
+  urgent
+}
+
+enum PitchFeeRule {
+  split_even
+  home_team_pays
+  away_team_pays
+  negotiable
+}
+
+enum MatchPostStatus {
+  open
+  pending_confirmation
+  matched
+  cancelled
+  expired
+}
+
+enum InvitationStatus {
+  sent
+  viewed
+  accepted
+  declined
+  expired
+}
+
+enum MatchStatus {
+  scheduled
+  confirmed
+  completed
+  cancelled
+}
+
+enum ParticipantSourceType {
+  team_member
+  freelance_player
+  guest
+}
+
+enum ParticipantRole {
+  player
+  captain
+  goalkeeper
+  manager
+}
+
+enum AttendanceStatus {
+  invited
+  confirmed
+  declined
+  checked_in
+  absent
+}
+
+enum PlayerRequestStatus {
+  open
+  partially_filled
+  filled
+  closed
+  cancelled
+}
+
+enum PlayerApplicationStatus {
+  applied
+  invited
+  confirmed
+  rejected
+  cancelled
+}
+
+enum ReviewTargetType {
+  team
+  player
+}
+
+enum ReviewStatus {
+  published
+  flagged
+  hidden
+}
+
+enum PollType {
+  attendance
+  approval
+  single_choice
+  multiple_choice
+}
+
+enum PollAudienceType {
+  whole_team
+  match_participants
+  leadership_only
+  custom
+}
+
+enum PollResultVisibility {
+  immediate
+  after_deadline
+  admins_only
+}
+
+enum PollStatus {
+  open
+  closed
+  cancelled
+}
+
+enum FeeType {
+  pitch
+  tournament
+  monthly_fund
+  jersey
+  other
+}
+
+enum FeeDistributionType {
+  fixed_per_member
+  split_even
+  custom_amounts
+}
+
+enum TeamFeeStatus {
+  open
+  partially_paid
+  paid
+  overdue
+  cancelled
+}
+
+enum PaymentStatus {
+  pending
+  paid
+  overdue
+  waived
+  partially_paid
+}
+
+enum PaymentMethod {
+  bank_transfer
+  cash
+  wallet
+  manual
+}
+
+enum PaymentRecordStatus {
+  pending_confirmation
+  confirmed
+  rejected
+}
+
+enum NotificationPriority {
+  low
+  medium
+  high
+}
+
+enum NotificationType {
+  match_invitation
+  match_confirmed
+  poll_created
+  poll_deadline_reminder
+  fee_created
+  fee_due_reminder
+  fee_overdue
+  review_received
+}
+
+enum ReminderTargetType {
+  poll
+  team_fee
+  match
+}
+
+enum ReminderType {
+  deadline_24h
+  deadline_2h
+  overdue_daily
+  match_day
+}
+
+enum ReminderStatus {
+  pending
+  sent
+  failed
+  skipped
+}
+
+enum ExportFormat {
+  xlsx
+  csv
+}
+
+enum ExportStatus {
+  queued
+  processing
+  ready
+  failed
+}
+
+enum ProductStatus {
+  draft
+  active
+  archived
+}
+
+enum OrderStatus {
+  pending
+  paid
+  fulfilled
+  cancelled
+}
