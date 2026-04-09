@@ -1,0 +1,41 @@
+{
+  "Home": {
+    "eyebrow": "Foundation Phase",
+    "title": "V-Pitch",
+    "loginCta": "Auth Stub",
+    "hero": {
+      "label": "Technical scaffold",
+      "title": "Start from the right foundation instead of jumping straight into the landing page.",
+      "body": "The repo now has a Next.js App Router shell, strict TypeScript, Tailwind foundation, next-intl, an Auth.js stub, a Prisma skeleton and domain folders to move into Auth -> Team -> Dashboard.",
+      "primaryCta": "Open login stub",
+      "secondaryCta": "View foundation"
+    },
+    "foundation": {
+      "label": "Technical Base",
+      "title": "Step 1 is scaffolded",
+      "badge": "Ready for Auth"
+    },
+    "stack": {
+      "label": "Stack",
+      "title": "Project baseline"
+    },
+    "next": {
+      "label": "Build Order",
+      "title": "Next implementation order"
+    },
+    "docs": {
+      "label": "Reference Set",
+      "title": "The docs are ready for domain-based coding",
+      "body": "Product strategy, schema, Prisma draft and API contracts already live in docs so the next coding phases can stay aligned."
+    }
+  },
+  "Login": {
+    "label": "Auth Placeholder",
+    "title": "The login screen will be wired in the next step",
+    "body": "This scaffold phase only sets up the route, provider shell and i18n foundation. OTP, session flow and guards come with the real Auth module.",
+    "placeholderTitle": "Ready for step 2",
+    "placeholderBody": "From here, the next move is Auth APIs, user creation, team creation and the first team dashboard.",
+    "backCta": "Back to home"
+  }
+}
+

@@ -1,0 +1,12 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// This is the bootstrap schema for the scaffold phase.
+/// The full logical draft lives in docs/12_PRISMA_SCHEMA_DRAFT.prisma.
+
