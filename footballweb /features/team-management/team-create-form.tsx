@@ -22,6 +22,8 @@ export function TeamCreateForm() {
   const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
   const [selectedFileName, setSelectedFileName] = useState("");
 
+  // TODO(storage-phase): replace local object URL preview + server-side data URL persistence
+  // with direct signed upload to object storage and persist only the final public file URL.
   function onFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
 
@@ -76,6 +78,9 @@ export function TeamCreateForm() {
             <p className="mt-3 text-sm font-semibold text-[var(--brand-strong)]">Preview logo đội</p>
             <p className="mt-1 text-xs leading-5 text-[var(--ink-soft)]">
               Bạn có thể tải ảnh trực tiếp từ máy hoặc dán URL ảnh. Bản hiện tại sẽ ưu tiên file nếu cả hai cùng có.
+            </p>
+            <p className="mt-2 text-xs leading-5 text-[var(--ink-soft)]">
+              TODO: khi có storage thật, preview này sẽ giữ nguyên nhưng phần submit sẽ đổi sang upload trước rồi lưu URL/CDN.
             </p>
             {selectedFileName ? (
               <p className="mt-3 rounded-2xl bg-[var(--card-muted)] px-3 py-2 text-xs font-medium text-[var(--brand-strong)]">
@@ -219,4 +224,3 @@ export function TeamCreateForm() {
     </form>
   );
 }
-
