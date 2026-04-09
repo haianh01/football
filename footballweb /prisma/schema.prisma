@@ -7,6 +7,191 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-/// This is the bootstrap schema for the scaffold phase.
-/// The full logical draft lives in docs/12_PRISMA_SCHEMA_DRAFT.prisma.
+model User {
+  id               String     @id @default(uuid()) @db.Uuid
+  phone            String?    @unique @db.VarChar(32)
+  email            String?    @unique @db.VarChar(255)
+  display_name     String     @db.VarChar(120)
+  avatar_url       String?
+  country_code     String     @default("VN") @db.VarChar(2)
+  timezone         String     @default("Asia/Ho_Chi_Minh") @db.VarChar(64)
+  preferred_locale String     @default("vi-VN") @db.VarChar(16)
+  status           UserStatus @default(active)
+  created_at       DateTime   @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime   @updatedAt @db.Timestamptz(6)
 
+  user_identities            UserIdentity[]
+  user_preferences           UserPreference?
+  created_teams              Team[]       @relation("team_created_by")
+  team_members               TeamMember[]
+  target_user_team_invites   TeamInvite[] @relation("team_invite_target_user")
+  created_team_invites       TeamInvite[] @relation("team_invite_created_by")
+
+  @@map("users")
+}
+
+model UserIdentity {
+  id               String           @id @default(uuid()) @db.Uuid
+  user_id          String           @db.Uuid
+  provider         IdentityProvider
+  provider_subject String           @db.VarChar(255)
+  created_at       DateTime         @default(now()) @db.Timestamptz(6)
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([provider, provider_subject])
+  @@map("user_identities")
+}
+
+model UserPreference {
+  user_id               String   @id @db.Uuid
+  spoken_languages      Json     @default(dbgenerated("'[]'::jsonb")) @db.JsonB
+  notification_settings Json     @default(dbgenerated("'{}'::jsonb")) @db.JsonB
+  marketing_opt_in      Boolean  @default(false)
+  created_at            DateTime @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime @updatedAt @db.Timestamptz(6)
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("user_preferences")
+}
+
+model Team {
+  id                 String         @id @default(uuid()) @db.Uuid
+  name               String         @db.VarChar(120)
+  slug               String         @unique @db.VarChar(140)
+  short_code         String         @unique @db.VarChar(40)
+  logo_url           String?
+  description        String?
+  home_country_code  String         @default("VN") @db.VarChar(2)
+  home_state_code    String?        @db.VarChar(64)
+  home_city_code     String?        @db.VarChar(64)
+  home_district_code String?        @db.VarChar(64)
+  default_locale     String         @default("vi-VN") @db.VarChar(16)
+  skill_level_code   SkillLevelCode
+  play_style_code    String?        @db.VarChar(64)
+  primary_color      String?        @db.VarChar(32)
+  secondary_color    String?        @db.VarChar(32)
+  status             TeamStatus     @default(active)
+  created_by         String         @db.Uuid
+  created_at         DateTime       @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime       @updatedAt @db.Timestamptz(6)
+
+  created_by_user User         @relation("team_created_by", fields: [created_by], references: [id], onDelete: Restrict)
+  team_members    TeamMember[]
+  team_invites    TeamInvite[]
+
+  @@index([home_city_code, skill_level_code], map: "idx_teams_city_skill")
+  @@map("teams")
+}
+
+model TeamMember {
+  id                        String           @id @default(uuid()) @db.Uuid
+  team_id                   String           @db.Uuid
+  user_id                   String           @db.Uuid
+  role                      TeamRole         @default(member)
+  shirt_number              Int?
+  primary_position_code     PositionCode?
+  secondary_position_codes  Json             @default(dbgenerated("'[]'::jsonb")) @db.JsonB
+  joined_at                 DateTime         @db.Timestamptz(6)
+  status                    TeamMemberStatus @default(active)
+  attendance_rate           Decimal          @default(0) @db.Decimal(5, 2)
+  current_debt_amount_minor BigInt           @default(0)
+  currency_code             String           @default("VND") @db.VarChar(3)
+  created_at                DateTime         @default(now()) @db.Timestamptz(6)
+  updated_at                DateTime         @updatedAt @db.Timestamptz(6)
+
+  team Team @relation(fields: [team_id], references: [id], onDelete: Cascade)
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([team_id, user_id])
+  @@index([team_id, role], map: "idx_team_members_team_role")
+  @@map("team_members")
+}
+
+model TeamInvite {
+  id             String       @id @default(uuid()) @db.Uuid
+  team_id        String       @db.Uuid
+  invite_type    InviteType
+  target_user_id String?      @db.Uuid
+  target_phone   String?      @db.VarChar(32)
+  invite_code    String       @unique @db.VarChar(80)
+  status         InviteStatus @default(pending)
+  expires_at     DateTime     @db.Timestamptz(6)
+  created_by     String       @db.Uuid
+  created_at     DateTime     @default(now()) @db.Timestamptz(6)
+
+  team            Team  @relation(fields: [team_id], references: [id], onDelete: Cascade)
+  target_user     User? @relation("team_invite_target_user", fields: [target_user_id], references: [id], onDelete: SetNull)
+  created_by_user User  @relation("team_invite_created_by", fields: [created_by], references: [id], onDelete: Restrict)
+
+  @@map("team_invites")
+}
+
+enum UserStatus {
+  active
+  suspended
+  deleted
+}
+
+enum IdentityProvider {
+  phone_otp
+  google
+  email
+}
+
+enum TeamStatus {
+  active
+  archived
+  suspended
+}
+
+enum TeamRole {
+  captain
+  vice_captain
+  treasurer
+  member
+}
+
+enum TeamMemberStatus {
+  active
+  invited
+  pending_approval
+  inactive
+  removed
+}
+
+enum InviteType {
+  link
+  code
+  phone
+  user
+}
+
+enum InviteStatus {
+  pending
+  accepted
+  expired
+  revoked
+}
+
+enum SkillLevelCode {
+  L1_CASUAL
+  L2_RECREATIONAL
+  L3_INTERMEDIATE
+  L4_ADVANCED
+  L5_COMPETITIVE
+}
+
+enum PositionCode {
+  GK
+  CB
+  LB
+  RB
+  DM
+  CM
+  AM
+  LW
+  RW
+  ST
+}

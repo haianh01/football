@@ -20,14 +20,21 @@ export default async function LoginPage() {
           <p className="mt-2 text-sm leading-6 text-[var(--ink-soft)]">{t("placeholderBody")}</p>
         </div>
 
-        <Link
-          href="/"
-          className="mt-6 inline-flex rounded-2xl bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white transition hover:translate-y-[-1px]"
-        >
-          {t("backCta")}
-        </Link>
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+          <Link
+            href="/team/create"
+            className="inline-flex rounded-2xl bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white transition hover:translate-y-[-1px]"
+          >
+            Tạo đội ngay
+          </Link>
+          <Link
+            href="/"
+            className="inline-flex rounded-2xl border border-black/10 px-4 py-2 text-sm font-semibold text-[var(--brand-strong)] transition hover:bg-white/70"
+          >
+            {t("backCta")}
+          </Link>
+        </div>
       </section>
     </main>
   );
 }
-

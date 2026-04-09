@@ -37,12 +37,20 @@ export default async function HomePage() {
               {t("title")}
             </h1>
           </div>
-          <Link
-            href="/login"
-            className="rounded-2xl bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white transition hover:translate-y-[-1px]"
-          >
-            {t("loginCta")}
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link
+              href="/team/create"
+              className="rounded-2xl bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white transition hover:translate-y-[-1px]"
+            >
+              Create Team
+            </Link>
+            <Link
+              href="/login"
+              className="rounded-2xl border border-black/10 px-4 py-2 text-sm font-semibold text-[var(--brand-strong)] transition hover:bg-white/70"
+            >
+              {t("loginCta")}
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -61,7 +69,7 @@ export default async function HomePage() {
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <Link
-              href="/login"
+              href="/team/create"
               className="rounded-2xl bg-white px-5 py-3 text-sm font-bold text-[var(--brand)] transition hover:translate-y-[-1px]"
             >
               {t("hero.primaryCta")}
@@ -165,4 +173,3 @@ export default async function HomePage() {
     </main>
   );
 }
-

@@ -7,7 +7,7 @@
       "label": "Scaffold kỹ thuật",
       "title": "Khởi động codebase từ nền móng đúng thay vì lao ngay vào landing page.",
       "body": "Repo hiện đã có khung Next.js App Router, TypeScript strict mode, Tailwind foundation, next-intl, Auth.js stub, Prisma skeleton và cấu trúc domain để đi tiếp sang Auth -> Team -> Dashboard.",
-      "primaryCta": "Xem login stub",
+      "primaryCta": "Tạo đội đầu tiên",
       "secondaryCta": "Xem foundation"
     },
     "foundation": {
@@ -32,10 +32,9 @@
   "Login": {
     "label": "Auth Placeholder",
     "title": "Màn đăng nhập sẽ được wire ở bước tiếp theo",
-    "body": "Bước scaffold chỉ dựng route, provider shell và i18n foundation. OTP, session flow và guards sẽ được làm khi bắt đầu module Auth thật.",
+    "body": "Bước này auth thật chưa hoàn tất. Trong môi trường development, API và team flow đang dùng dev fallback user để bạn có thể tiếp tục code slice Team ngay.",
     "placeholderTitle": "Sẵn sàng cho bước 2",
     "placeholderBody": "Từ đây có thể tiếp tục sang API Auth, tạo user, tạo team và dashboard đội cơ bản.",
     "backCta": "Về trang chính"
   }
 }
-
