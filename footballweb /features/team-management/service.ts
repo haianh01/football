@@ -1,4 +1,4 @@
-import { TeamMemberStatus, TeamRole } from "@prisma/client";
+import { InviteStatus, InviteType, TeamMemberStatus, TeamRole } from "@prisma/client";
 
 import { db } from "@/lib/db";
 import { ApiError } from "@/lib/http";
@@ -241,4 +241,232 @@ export async function getTeamDashboard(teamId: string, currentUserId: string) {
       joined_at: member.joined_at.toISOString()
     }))
   };
+}
+
+async function requireTeamCaptainAccess(teamId: string, userId: string) {
+  const membership = await db.teamMember.findUnique({
+    where: {
+      team_id_user_id: {
+        team_id: teamId,
+        user_id: userId
+      }
+    },
+    select: {
+      role: true,
+      status: true
+    }
+  });
+
+  if (!membership || membership.status !== TeamMemberStatus.active || membership.role !== TeamRole.captain) {
+    throw new ApiError(403, "FORBIDDEN", "Captain permission is required.");
+  }
+
+  return membership;
+}
+
+async function createUniqueInviteCode(prefix = "VPINV") {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const candidate = `${prefix}-${crypto.randomUUID().slice(0, 10).toUpperCase()}`;
+    const existing = await db.teamInvite.findUnique({
+      where: {
+        invite_code: candidate
+      },
+      select: {
+        id: true
+      }
+    });
+
+    if (!existing) {
+      return candidate;
+    }
+  }
+
+  throw new ApiError(409, "CONFLICT", "Unable to generate a unique invite code.");
+}
+
+export async function createTeamInvite(teamId: string, createdByUserId: string, options?: { expiresInDays?: number }) {
+  await requireTeamCaptainAccess(teamId, createdByUserId);
+
+  const expiresInDays = options?.expiresInDays ?? 14;
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + expiresInDays * 24 * 60 * 60 * 1000);
+
+  const inviteCode = await createUniqueInviteCode();
+
+  const invite = await db.teamInvite.create({
+    data: {
+      team_id: teamId,
+      invite_type: InviteType.code,
+      invite_code: inviteCode,
+      status: InviteStatus.pending,
+      expires_at: expiresAt,
+      created_by: createdByUserId
+    }
+  });
+
+  return {
+    id: invite.id,
+    team_id: invite.team_id,
+    invite_code: invite.invite_code,
+    status: invite.status,
+    expires_at: invite.expires_at.toISOString(),
+    created_at: invite.created_at.toISOString()
+  };
+}
+
+export async function listTeamInvites(teamId: string, currentUserId: string) {
+  await requireTeamCaptainAccess(teamId, currentUserId);
+
+  const now = new Date();
+  const invites = await db.teamInvite.findMany({
+    where: {
+      team_id: teamId
+    },
+    orderBy: [{ created_at: "desc" }],
+    take: 25
+  });
+
+  return invites.map((invite) => {
+    const derivedStatus =
+      invite.status === InviteStatus.pending && invite.expires_at <= now ? InviteStatus.expired : invite.status;
+
+    return {
+      id: invite.id,
+      team_id: invite.team_id,
+      invite_type: invite.invite_type,
+      invite_code: invite.invite_code,
+      status: derivedStatus,
+      expires_at: invite.expires_at.toISOString(),
+      created_at: invite.created_at.toISOString()
+    };
+  });
+}
+
+export async function revokeTeamInvite(teamId: string, inviteId: string, currentUserId: string) {
+  await requireTeamCaptainAccess(teamId, currentUserId);
+
+  const invite = await db.teamInvite.findUnique({
+    where: {
+      id: inviteId
+    },
+    select: {
+      id: true,
+      team_id: true,
+      status: true
+    }
+  });
+
+  if (!invite || invite.team_id !== teamId) {
+    throw new ApiError(404, "NOT_FOUND", "Invite not found.");
+  }
+
+  if (invite.status !== InviteStatus.pending) {
+    return;
+  }
+
+  await db.teamInvite.update({
+    where: {
+      id: inviteId
+    },
+    data: {
+      status: InviteStatus.revoked
+    }
+  });
+}
+
+export async function acceptTeamInvite(inviteCode: string, currentUserId: string) {
+  const normalizedCode = inviteCode.trim();
+
+  if (!normalizedCode) {
+    throw new ApiError(400, "VALIDATION_ERROR", "Invite code is required.");
+  }
+
+  const now = new Date();
+
+  return db.$transaction(async (tx) => {
+    const invite = await tx.teamInvite.findUnique({
+      where: {
+        invite_code: normalizedCode
+      }
+    });
+
+    if (!invite) {
+      throw new ApiError(404, "NOT_FOUND", "Invite not found.");
+    }
+
+    if (invite.status === InviteStatus.accepted && invite.target_user_id === currentUserId) {
+      return {
+        team_id: invite.team_id
+      };
+    }
+
+    if (invite.status !== InviteStatus.pending) {
+      throw new ApiError(409, "CONFLICT", "Invite is no longer available.");
+    }
+
+    if (invite.expires_at <= now) {
+      await tx.teamInvite.update({
+        where: {
+          id: invite.id
+        },
+        data: {
+          status: InviteStatus.expired
+        }
+      });
+
+      throw new ApiError(410, "GONE", "Invite has expired.");
+    }
+
+    const existingMembership = await tx.teamMember.findUnique({
+      where: {
+        team_id_user_id: {
+          team_id: invite.team_id,
+          user_id: currentUserId
+        }
+      },
+      select: {
+        id: true
+      }
+    });
+
+    if (existingMembership) {
+      await tx.teamInvite.update({
+        where: {
+          id: invite.id
+        },
+        data: {
+          status: InviteStatus.accepted,
+          target_user_id: currentUserId
+        }
+      });
+
+      return {
+        team_id: invite.team_id
+      };
+    }
+
+    await tx.teamMember.create({
+      data: {
+        team_id: invite.team_id,
+        user_id: currentUserId,
+        role: TeamRole.member,
+        status: TeamMemberStatus.active,
+        joined_at: now
+      }
+    });
+
+    await tx.teamInvite.update({
+      where: {
+        id: invite.id
+      },
+      data: {
+        status: InviteStatus.accepted,
+        target_user_id: currentUserId
+      }
+    });
+
+    return {
+      team_id: invite.team_id
+    };
+  });
 }

@@ -4,7 +4,8 @@ import { notFound } from "next/navigation";
 import { TeamAvatar } from "@/components/shared";
 import { requireCurrentUser } from "@/lib/auth/current-user";
 import { ApiError } from "@/lib/http";
-import { getTeamDashboard } from "@/features/team-management/service";
+import { createTeamInviteAction, revokeTeamInviteAction } from "@/features/team-management/invite-actions";
+import { getTeamDashboard, listTeamInvites } from "@/features/team-management/service";
 
 export default async function TeamDashboardPage({
   params
@@ -16,6 +17,8 @@ export default async function TeamDashboardPage({
   try {
     const currentUser = await requireCurrentUser();
     const dashboard = await getTeamDashboard(teamId, currentUser.id);
+    const invites =
+      dashboard.team_summary.role_of_current_user === "captain" ? await listTeamInvites(teamId, currentUser.id) : [];
 
     return (
       <main className="mx-auto flex min-h-screen max-w-6xl flex-col px-4 py-8 sm:px-6 lg:px-8">
@@ -130,6 +133,75 @@ export default async function TeamDashboardPage({
                 Xem danh sách kèo
               </Link>
             </div>
+
+            {dashboard.team_summary.role_of_current_user === "captain" ? (
+              <section className="mt-8 rounded-3xl border border-black/8 bg-white p-5">
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--brand)]">Team Invite</p>
+                <h3 className="mt-2 font-[var(--font-headline)] text-xl font-extrabold text-[var(--brand-strong)]">
+                  Mời thành viên
+                </h3>
+                <p className="mt-2 text-sm leading-6 text-[var(--ink-soft)]">
+                  Tạo mã mời để thành viên khác join team. Slice này ưu tiên code-based invite (link join dùng chung code).
+                </p>
+
+                <form action={createTeamInviteAction} className="mt-4">
+                  <input type="hidden" name="team_id" value={teamId} />
+                  <button
+                    type="submit"
+                    className="w-full rounded-2xl bg-[var(--brand-strong)] px-4 py-3 text-sm font-semibold text-white transition hover:translate-y-[-1px]"
+                  >
+                    Tạo mã mời
+                  </button>
+                </form>
+
+                <div className="mt-5 grid gap-3">
+                  {invites.length === 0 ? (
+                    <p className="rounded-2xl bg-[var(--card-muted)] px-4 py-3 text-sm text-[var(--ink-soft)]">
+                      Chưa có mã mời nào. Nhấn “Tạo mã mời” để tạo mới.
+                    </p>
+                  ) : (
+                    invites.map((invite) => (
+                      <article key={invite.id} className="rounded-2xl bg-[var(--card-muted)] p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--brand)]">
+                              {invite.status}
+                            </p>
+                            <p className="mt-2 text-sm font-semibold text-[var(--brand-strong)]">Mã mời</p>
+                            <input
+                              readOnly
+                              value={invite.invite_code}
+                              className="mt-2 w-full rounded-2xl border border-black/10 bg-white px-3 py-2 text-sm font-semibold text-[var(--brand-strong)]"
+                              aria-label="Mã mời"
+                            />
+                            <p className="mt-2 text-xs text-[var(--ink-soft)]">Hết hạn: {new Date(invite.expires_at).toLocaleString("vi-VN")}</p>
+                            <Link
+                              href={`/team/join?code=${encodeURIComponent(invite.invite_code)}`}
+                              className="mt-3 inline-flex rounded-2xl border border-black/10 bg-white px-3 py-2 text-xs font-semibold text-[var(--brand-strong)] transition hover:bg-white/70"
+                            >
+                              Mở link join
+                            </Link>
+                          </div>
+
+                          {invite.status === "pending" ? (
+                            <form action={revokeTeamInviteAction}>
+                              <input type="hidden" name="team_id" value={teamId} />
+                              <input type="hidden" name="invite_id" value={invite.id} />
+                              <button
+                                type="submit"
+                                className="rounded-2xl border border-black/10 bg-white px-3 py-2 text-xs font-semibold text-[var(--brand-strong)] transition hover:bg-white/70"
+                              >
+                                Thu hồi
+                              </button>
+                            </form>
+                          ) : null}
+                        </div>
+                      </article>
+                    ))
+                  )}
+                </div>
+              </section>
+            ) : null}
           </aside>
         </section>
 
