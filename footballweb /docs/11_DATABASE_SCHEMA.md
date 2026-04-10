@@ -76,6 +76,14 @@ Tài liệu này chưa phải migration file, nhưng phải đủ rõ để chuy
 - `orders`
 - `order_items`
 
+### Planned Media
+
+- `media_assets`
+- `team_media`
+- `player_media`
+- `media_moderation_logs`
+- `media_processing_jobs`
+
 ## 4. Bảng identity
 
 ### users
@@ -618,6 +626,225 @@ Columns:
 - `description` text null
 - `category_code` varchar not null
 - `status` product_status not null default `'active'`
+
+## 14. Bảng media mở rộng trong tương lai
+
+Phần này chưa cần triển khai ngay trong migration hiện tại, nhưng nên được xem là `planned domain` để sau này mở rộng không phải đập lại schema hồ sơ đội và hồ sơ cầu thủ.
+
+### media_assets
+
+Metadata gốc của ảnh và video.
+
+Columns:
+
+- `id` uuid pk
+- `owner_type` media_owner_type not null
+- `owner_id` uuid not null
+- `media_type` media_type not null
+- `storage_provider` storage_provider not null
+- `storage_key` varchar not null
+- `public_url` text not null
+- `thumbnail_url` text null
+- `mime_type` varchar not null
+- `file_size_bytes` bigint not null
+- `width` integer null
+- `height` integer null
+- `duration_seconds` integer null
+- `processing_status` media_processing_status not null default `'pending'`
+- `visibility` media_visibility not null default `'public'`
+- `caption` varchar null
+- `created_by` uuid fk -> users.id
+- `created_at` timestamptz not null
+- `updated_at` timestamptz not null
+
+Indexes:
+
+- `idx_media_assets_owner_created` on `(owner_type, owner_id, created_at desc)`
+- `idx_media_assets_processing_status` on `(processing_status, created_at)`
+
+### team_media
+
+Liên kết media với hồ sơ đội.
+
+Columns:
+
+- `id` uuid pk
+- `team_id` uuid fk -> teams.id
+- `media_asset_id` uuid fk -> media_assets.id
+- `media_role` media_role not null
+- `sort_order` integer not null default `0`
+- `is_featured` boolean not null default `false`
+- `created_at` timestamptz not null
+
+Unique:
+
+- `(team_id, media_asset_id)`
+
+Indexes:
+
+- `idx_team_media_team_role_sort` on `(team_id, media_role, sort_order)`
+
+### player_media
+
+Liên kết media với hồ sơ cầu thủ.
+
+Columns:
+
+- `id` uuid pk
+- `player_profile_id` uuid fk -> player_profiles.id
+- `media_asset_id` uuid fk -> media_assets.id
+- `media_role` media_role not null
+- `sort_order` integer not null default `0`
+- `is_featured` boolean not null default `false`
+- `created_at` timestamptz not null
+
+Unique:
+
+- `(player_profile_id, media_asset_id)`
+
+Indexes:
+
+- `idx_player_media_profile_role_sort` on `(player_profile_id, media_role, sort_order)`
+
+### media_moderation_logs
+
+Columns:
+
+- `id` uuid pk
+- `media_asset_id` uuid fk -> media_assets.id
+- `status` moderation_status not null
+- `reason_code` varchar null
+- `reviewed_by` uuid null fk -> users.id
+- `note` text null
+- `created_at` timestamptz not null
+
+Indexes:
+
+- `idx_media_moderation_media_created` on `(media_asset_id, created_at desc)`
+
+### media_processing_jobs
+
+Columns:
+
+- `id` uuid pk
+- `media_asset_id` uuid fk -> media_assets.id
+- `job_type` media_job_type not null
+- `status` job_status not null default `'pending'`
+- `attempt_count` integer not null default `0`
+- `last_error` text null
+- `scheduled_at` timestamptz not null
+- `started_at` timestamptz null
+- `finished_at` timestamptz null
+- `created_at` timestamptz not null
+
+Indexes:
+
+- `idx_media_processing_jobs_status_scheduled` on `(status, scheduled_at)`
+- `idx_media_processing_jobs_media_asset` on `(media_asset_id, created_at desc)`
+
+## 15. Đánh giá index hiện tại
+
+### Kết luận ngắn
+
+Index hiện tại `ổn cho MVP và closed beta`, nhưng chưa thể gọi là tối ưu cuối cùng cho production traffic lớn.
+
+Nó đang ở trạng thái:
+
+- đủ cho các query lõi đã biết
+- chưa đủ cho mọi query dashboard, reminder, moderation và media trong tương lai
+- cần bổ sung tiếp khi module được bật thật
+
+### Nhóm đã ổn tương đối
+
+- `users`: unique trên `phone`, `email`
+- `user_identities`: unique trên `(provider, provider_subject)`
+- `teams`: unique trên `slug`, `short_code`, index discovery theo `(home_city_code, skill_level_code)`
+- `team_members`: unique `(team_id, user_id)` và index `(team_id, role)`
+- `player_profiles`: index `(preferred_city_code, skill_level_code)`
+- `match_posts`: index discovery theo `(status, city_code, date, field_type)`
+- `polls`: index `(team_id, status, deadline_at)`
+- `team_fees`: index `(team_id, status, due_at)`
+- `team_fee_assignees`: unique `(team_fee_id, user_id)` và index `(user_id, payment_status)`
+- `notifications`: index `(user_id, created_at desc)`
+
+Các index này phù hợp với use case list/filter chính của MVP.
+
+### Nhóm còn thiếu hoặc nên bổ sung sớm khi scale
+
+- `team_invites`
+  - nên thêm index `(team_id, status)`
+  - nên thêm index `(target_phone)` nếu dùng invite theo số điện thoại nhiều
+  - nên thêm index `(expires_at)` để cleanup job
+
+- `match_invitations`
+  - nên thêm unique `(match_post_id, from_team_id, to_team_id)` để chống gửi trùng
+  - nên thêm index `(to_team_id, status, created_at desc)` cho inbox lời mời
+
+- `matches`
+  - nên thêm index `(away_team_id, date)`
+  - nếu dashboard đội query cả home và away nhiều, nên cân nhắc materialized view hoặc denormalized team schedule sau này
+
+- `match_participants`
+  - nên thêm index `(user_id, attendance_status)`
+  - nên thêm index `(team_id, match_id)` nếu team dashboard đọc danh sách người tham gia thường xuyên
+
+- `player_request_posts`
+  - nên thêm index `(status, district_code, date)`
+  - nên thêm index `(created_by, created_at desc)` cho màn quản lý tin
+
+- `player_applications`
+  - nên thêm index `(player_user_id, status, created_at desc)` cho màn kèo đã ứng tuyển
+  - nên thêm index `(player_request_post_id, status)` cho đội quản lý ứng viên
+
+- `reviews`
+  - nên thêm unique hoặc constraint business để hạn chế review trùng theo `(match_id, reviewer_user_id, target_type, target_team_id/target_user_id)`
+
+- `reputation_snapshots`
+  - nên thêm unique theo target để mỗi target chỉ có một snapshot active
+
+- `poll_options`
+  - nên thêm index `(poll_id, sort_order)`
+
+- `poll_votes`
+  - với poll single choice, unique hiện tại `(poll_id, user_id, option_id)` chưa đủ chặt
+  - nếu poll single choice chiếm đa số, nên cân nhắc unique `(poll_id, user_id)` và xử lý multi-choice bằng bảng phụ hoặc flag logic rõ hơn
+  - ít nhất nên thêm index `(poll_id, created_at)`
+
+- `payment_records`
+  - nên thêm index `(team_fee_id, paid_at desc)`
+  - nên thêm index `(user_id, paid_at desc)`
+  - nên thêm unique một phần cho `reference_code` nếu có provider external
+
+- `reminder_jobs`
+  - nên thêm index `(status, scheduled_at)`
+  - nên thêm index `(target_type, target_id)`
+
+- `audit_logs`
+  - nên thêm index `(entity_type, entity_id, created_at desc)`
+  - nên thêm index `(actor_user_id, created_at desc)`
+
+- `settlement_exports`
+  - nên thêm index `(team_id, period_month)`
+
+- `products`
+  - nên thêm index `(status, category_code)`
+
+- `orders`
+  - nên thêm index `(user_id, created_at desc)`
+  - nên thêm index `(team_id, created_at desc)` nếu order gắn ngữ cảnh đội
+
+### Kết luận thực tế
+
+Nếu chỉ hỏi `ổn định chưa`, câu trả lời chính xác là:
+
+- `ổn cho MVP`: có
+- `ổn cho scale lớn mà không rà lại`: chưa
+
+Đây là trạng thái bình thường. Index không nên chốt cứng hết từ đầu theo tưởng tượng, mà nên:
+
+1. đặt chắc các index phục vụ flow lõi
+2. thêm index theo query plan khi module thật được bật
+3. theo dõi slow query trước khi traffic lớn
 - `currency_code` varchar(3) not null default `'VND'`
 - `base_price_minor` bigint not null
 - `compare_at_price_minor` bigint null

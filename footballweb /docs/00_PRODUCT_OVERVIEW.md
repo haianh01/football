@@ -196,5 +196,6 @@ Các file chi tiết đi kèm tài liệu này:
 - `11_DATABASE_SCHEMA.md`
 - `12_PRISMA_SCHEMA_DRAFT.prisma`
 - `13_API_CONTRACTS.md`
+- `14_MEDIA_AND_PROFILE_CONTENT.md`
 
 Mỗi file chi tiết đều bổ sung các phần còn thiếu đã lộ ra từ các bản HTML phác thảo trước đó.

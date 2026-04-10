@@ -26,7 +26,9 @@ model User {
   team_members               TeamMember[]
   target_user_team_invites   TeamInvite[] @relation("team_invite_target_user")
   created_team_invites       TeamInvite[] @relation("team_invite_created_by")
+  created_match_posts        MatchPost[]  @relation("match_post_created_by")
 
+  @@index([status, created_at], map: "idx_users_status_created")
   @@map("users")
 }
 
@@ -80,8 +82,10 @@ model Team {
   created_by_user User         @relation("team_created_by", fields: [created_by], references: [id], onDelete: Restrict)
   team_members    TeamMember[]
   team_invites    TeamInvite[]
+  match_posts     MatchPost[]
 
   @@index([home_city_code, skill_level_code], map: "idx_teams_city_skill")
+  @@index([created_by, created_at], map: "idx_teams_created_by_created")
   @@map("teams")
 }
 
@@ -106,6 +110,7 @@ model TeamMember {
 
   @@unique([team_id, user_id])
   @@index([team_id, role], map: "idx_team_members_team_role")
+  @@index([user_id, status, joined_at], map: "idx_team_members_user_status_joined")
   @@map("team_members")
 }
 
@@ -125,7 +130,50 @@ model TeamInvite {
   target_user     User? @relation("team_invite_target_user", fields: [target_user_id], references: [id], onDelete: SetNull)
   created_by_user User  @relation("team_invite_created_by", fields: [created_by], references: [id], onDelete: Restrict)
 
+  @@index([team_id, status], map: "idx_team_invites_team_status")
+  @@index([target_phone], map: "idx_team_invites_target_phone")
+  @@index([target_user_id, status], map: "idx_team_invites_target_user_status")
+  @@index([expires_at], map: "idx_team_invites_expires_at")
   @@map("team_invites")
+}
+
+model MatchPost {
+  id               String          @id @default(uuid()) @db.Uuid
+  team_id          String          @db.Uuid
+  title            String?         @db.VarChar(160)
+  match_type       MatchType       @default(friendly)
+  status           MatchPostStatus @default(open)
+  urgency          UrgencyLevel    @default(normal)
+  date             DateTime        @db.Date
+  start_time       DateTime        @db.Time(6)
+  end_time         DateTime?       @db.Time(6)
+  timezone         String          @default("Asia/Ho_Chi_Minh") @db.VarChar(64)
+  country_code     String          @default("VN") @db.VarChar(2)
+  state_code       String?         @db.VarChar(64)
+  city_code        String?         @db.VarChar(64)
+  district_code    String?         @db.VarChar(64)
+  venue_name       String?         @db.VarChar(160)
+  venue_address    String?
+  field_type       FieldType
+  team_skill_min   SkillLevelCode
+  team_skill_max   SkillLevelCode
+  pitch_fee_rule   PitchFeeRule
+  support_note     String?         @db.VarChar(160)
+  currency_code    String          @default("VND") @db.VarChar(3)
+  note             String?
+  expires_at       DateTime?       @db.Timestamptz(6)
+  created_by       String          @db.Uuid
+  created_at       DateTime        @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime        @updatedAt @db.Timestamptz(6)
+
+  team            Team @relation(fields: [team_id], references: [id], onDelete: Restrict)
+  created_by_user User @relation("match_post_created_by", fields: [created_by], references: [id], onDelete: Restrict)
+
+  @@index([status, city_code, date, field_type], map: "idx_match_posts_discovery")
+  @@index([team_id, status, created_at], map: "idx_match_posts_team_status_created")
+  @@index([created_by, created_at], map: "idx_match_posts_created_by_created")
+  @@index([team_skill_min, team_skill_max], map: "idx_match_posts_skill")
+  @@map("match_posts")
 }
 
 enum UserStatus {
@@ -194,4 +242,37 @@ enum PositionCode {
   LW
   RW
   ST
+}
+
+enum MatchType {
+  friendly
+  tactical
+  mini_tournament
+}
+
+enum MatchPostStatus {
+  open
+  pending_confirmation
+  matched
+  cancelled
+  expired
+}
+
+enum UrgencyLevel {
+  low
+  normal
+  high
+}
+
+enum FieldType {
+  five
+  seven
+  eleven
+}
+
+enum PitchFeeRule {
+  share
+  home_team_pays
+  away_team_pays
+  sponsor_supported
 }
