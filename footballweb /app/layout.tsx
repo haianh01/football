@@ -1,20 +1,8 @@
 import type { Metadata } from "next";
-import { Be_Vietnam_Pro, Inter } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
 
 import "./globals.css";
-
-const headline = Be_Vietnam_Pro({
-  subsets: ["latin", "vietnamese"],
-  variable: "--font-headline",
-  weight: ["400", "600", "700", "800"]
-});
-
-const body = Inter({
-  subsets: ["latin", "vietnamese"],
-  variable: "--font-body"
-});
 
 export const metadata: Metadata = {
   title: "V-Pitch",
@@ -30,11 +18,18 @@ export default async function RootLayout({
   const messages = await getMessages();
 
   return (
-    <html lang={locale} className={`${headline.variable} ${body.variable}`}>
+    <html
+      lang={locale}
+      style={
+        {
+          "--font-headline": '"Be Vietnam Pro", "Segoe UI", sans-serif',
+          "--font-body": '"Inter", "Segoe UI", sans-serif'
+        } as React.CSSProperties
+      }
+    >
       <body className="font-[var(--font-body)] antialiased">
         <NextIntlClientProvider messages={messages}>{children}</NextIntlClientProvider>
       </body>
     </html>
   );
 }
-

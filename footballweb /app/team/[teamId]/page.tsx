@@ -112,16 +112,22 @@ export default async function TeamDashboardPage({
 
             <div className="mt-6 flex flex-col gap-3">
               <Link
-                href="/team/create"
+                href="/match/posts/create"
                 className="rounded-2xl bg-[var(--brand)] px-4 py-3 text-center text-sm font-semibold text-white transition hover:translate-y-[-1px]"
+              >
+                Đăng kèo tìm đối
+              </Link>
+              <Link
+                href="/team/create"
+                className="rounded-2xl border border-black/10 px-4 py-3 text-center text-sm font-semibold text-[var(--brand-strong)] transition hover:bg-white/70"
               >
                 Tạo thêm đội
               </Link>
               <Link
-                href="/"
+                href="/match/posts"
                 className="rounded-2xl border border-black/10 px-4 py-3 text-center text-sm font-semibold text-[var(--brand-strong)] transition hover:bg-white/70"
               >
-                Về trang chính
+                Xem danh sách kèo
               </Link>
             </div>
           </aside>

@@ -39,6 +39,12 @@ export default async function HomePage() {
           </div>
           <div className="flex items-center gap-3">
             <Link
+              href="/match/posts"
+              className="rounded-2xl border border-black/10 px-4 py-2 text-sm font-semibold text-[var(--brand-strong)] transition hover:bg-white/70"
+            >
+              Match Posts
+            </Link>
+            <Link
               href="/team/create"
               className="rounded-2xl bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white transition hover:translate-y-[-1px]"
             >
@@ -73,6 +79,12 @@ export default async function HomePage() {
               className="rounded-2xl bg-white px-5 py-3 text-sm font-bold text-[var(--brand)] transition hover:translate-y-[-1px]"
             >
               {t("hero.primaryCta")}
+            </Link>
+            <Link
+              href="/match/posts"
+              className="rounded-2xl border border-white/30 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
+            >
+              Xem kèo đang mở
             </Link>
             <a
               href="#foundation"
