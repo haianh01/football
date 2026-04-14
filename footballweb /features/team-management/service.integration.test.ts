@@ -114,5 +114,230 @@ describe("team-management service integration", () => {
     expect(dashboard.member_summary.active_members).toBe(2);
     expect(dashboard.member_summary.average_attendance_rate).toBe(75);
     expect(dashboard.members).toHaveLength(2);
+    expect(dashboard.action_center.pending_confirmations).toBe(0);
+    expect(dashboard.action_center.upcoming_match_shortage).toBe(0);
+    expect(dashboard.pending_match_invitations).toEqual([]);
+  });
+
+  it("getTeamDashboard includes pending match invitations for captain", async () => {
+    const teamId = "44444444-4444-4444-4444-444444444444";
+    const challengerId = "88888888-8888-8888-8888-888888888888";
+    const challengerTeamId = "99999999-9999-9999-9999-999999999999";
+
+    await integrationDb.team.create({
+      data: {
+        id: teamId,
+        name: "FC Dashboard",
+        slug: "fc-dashboard",
+        short_code: "VP-DASH001",
+        skill_level_code: "L3_INTERMEDIATE",
+        created_by: captainId
+      }
+    });
+
+    await integrationDb.teamMember.create({
+      data: {
+        team_id: teamId,
+        user_id: captainId,
+        role: "captain",
+        status: "active",
+        joined_at: new Date("2026-04-10T10:00:00.000Z")
+      }
+    });
+
+    await integrationDb.user.create({
+      data: {
+        id: challengerId,
+        email: "challenger@example.com",
+        display_name: "Challenger",
+        country_code: "VN",
+        timezone: "Asia/Ho_Chi_Minh",
+        preferred_locale: "vi-VN"
+      }
+    });
+
+    await integrationDb.team.create({
+      data: {
+        id: challengerTeamId,
+        name: "FC Challenger",
+        slug: "fc-challenger",
+        short_code: "VP-CHALL01",
+        skill_level_code: "L3_INTERMEDIATE",
+        created_by: challengerId
+      }
+    });
+
+    await integrationDb.teamMember.create({
+      data: {
+        team_id: challengerTeamId,
+        user_id: challengerId,
+        role: "captain",
+        status: "active",
+        joined_at: new Date("2026-04-10T11:00:00.000Z")
+      }
+    });
+
+    const { createMatchInvitation, createMatchPost } = await import("@/features/matchmaking/service");
+    const { getTeamDashboard } = await import("./service");
+
+    const post = await createMatchPost(
+      {
+        team_id: teamId,
+        title: "Kèo dashboard pending",
+        match_type: "friendly",
+        urgency: "normal",
+        date: "2026-04-12",
+        start_time: "19:30",
+        end_time: "21:00",
+        city_code: "HCM",
+        district_code: "Q7",
+        venue_name: "Sân Đại Nam",
+        field_type: "seven",
+        team_skill_min: "L2_RECREATIONAL",
+        team_skill_max: "L4_ADVANCED",
+        pitch_fee_rule: "share"
+      },
+      captainId
+    );
+
+    await createMatchInvitation(
+      {
+        match_post_id: post.id,
+        inviter_team_id: challengerTeamId
+      },
+      challengerId
+    );
+
+    const dashboard = await getTeamDashboard(teamId, captainId);
+
+    expect(dashboard.action_center.pending_confirmations).toBe(1);
+    expect(dashboard.action_center.upcoming_match_shortage).toBe(0);
+    expect(dashboard.pending_match_invitations).toHaveLength(1);
+    expect(dashboard.pending_match_invitations[0]).toEqual(
+      expect.objectContaining({
+        inviter_team: expect.objectContaining({
+          id: challengerTeamId,
+          name: "FC Challenger"
+        }),
+        match_post: expect.objectContaining({
+          id: post.id,
+          title: "Kèo dashboard pending"
+        })
+      })
+    );
+  });
+
+  it("getTeamDashboard includes upcoming matched fixtures for captain", async () => {
+    const teamId = "44444444-4444-4444-4444-444444444444";
+    const challengerId = "88888888-8888-8888-8888-888888888888";
+    const challengerTeamId = "99999999-9999-9999-9999-999999999999";
+
+    await integrationDb.team.create({
+      data: {
+        id: teamId,
+        name: "FC Dashboard",
+        slug: "fc-dashboard",
+        short_code: "VP-DASH001",
+        skill_level_code: "L3_INTERMEDIATE",
+        created_by: captainId
+      }
+    });
+
+    await integrationDb.teamMember.create({
+      data: {
+        team_id: teamId,
+        user_id: captainId,
+        role: "captain",
+        status: "active",
+        joined_at: new Date("2026-04-10T10:00:00.000Z")
+      }
+    });
+
+    await integrationDb.user.create({
+      data: {
+        id: challengerId,
+        email: "challenger@example.com",
+        display_name: "Challenger",
+        country_code: "VN",
+        timezone: "Asia/Ho_Chi_Minh",
+        preferred_locale: "vi-VN"
+      }
+    });
+
+    await integrationDb.team.create({
+      data: {
+        id: challengerTeamId,
+        name: "FC Challenger",
+        slug: "fc-challenger",
+        short_code: "VP-CHALL01",
+        skill_level_code: "L3_INTERMEDIATE",
+        created_by: challengerId
+      }
+    });
+
+    await integrationDb.teamMember.create({
+      data: {
+        team_id: challengerTeamId,
+        user_id: challengerId,
+        role: "captain",
+        status: "active",
+        joined_at: new Date("2026-04-10T11:00:00.000Z")
+      }
+    });
+
+    const { acceptMatchInvitation, createMatchInvitation, createMatchPost } = await import("@/features/matchmaking/service");
+    const { getTeamDashboard } = await import("./service");
+
+    const post = await createMatchPost(
+      {
+        team_id: teamId,
+        title: "Kèo dashboard upcoming",
+        match_type: "friendly",
+        urgency: "normal",
+        date: "2099-04-18",
+        start_time: "19:30",
+        end_time: "21:00",
+        city_code: "HCM",
+        district_code: "Q7",
+        venue_name: "Sân Đại Nam",
+        field_type: "seven",
+        team_skill_min: "L2_RECREATIONAL",
+        team_skill_max: "L4_ADVANCED",
+        pitch_fee_rule: "share"
+      },
+      captainId
+    );
+
+    const invitation = await createMatchInvitation(
+      {
+        match_post_id: post.id,
+        inviter_team_id: challengerTeamId
+      },
+      challengerId
+    );
+
+    await acceptMatchInvitation(invitation.id, captainId);
+
+    const dashboard = await getTeamDashboard(teamId, captainId);
+
+    expect(dashboard.upcoming_matches).toHaveLength(1);
+    expect(dashboard.upcoming_matches[0]).toEqual(
+      expect.objectContaining({
+        source_match_post_id: post.id,
+        status: "scheduled",
+        current_team_available_count: 1,
+        current_team_required_players: 7,
+        current_team_shortage: 6,
+        home_team: expect.objectContaining({
+          id: teamId,
+          name: "FC Dashboard"
+        }),
+        away_team: expect.objectContaining({
+          id: challengerTeamId,
+          name: "FC Challenger"
+        })
+      })
+    );
+    expect(dashboard.action_center.upcoming_match_shortage).toBe(6);
   });
 });

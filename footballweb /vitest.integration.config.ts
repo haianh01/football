@@ -2,13 +2,13 @@ import { defineConfig } from "vitest/config";
 import path from "node:path";
 
 export default defineConfig({
-  maxWorkers: 1,
   test: {
     environment: "node",
     include: ["features/**/*.integration.test.ts"],
     setupFiles: ["./test/integration/setup.ts"],
     pool: "forks",
-    fileParallelism: false
+    fileParallelism: false,
+    maxWorkers: 1
   },
   resolve: {
     alias: {

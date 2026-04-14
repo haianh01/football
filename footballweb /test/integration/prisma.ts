@@ -26,6 +26,9 @@ export const integrationDb = new PrismaClient({
 });
 
 export async function clearIntegrationData() {
+  await integrationDb.matchParticipant.deleteMany();
+  await integrationDb.match.deleteMany();
+  await integrationDb.matchInvitation.deleteMany();
   await integrationDb.matchPost.deleteMany();
   await integrationDb.teamInvite.deleteMany();
   await integrationDb.teamMember.deleteMany();
@@ -39,6 +42,7 @@ export function resetIntegrationSchema() {
   const currentFile = fileURLToPath(import.meta.url);
   const projectRoot = path.resolve(path.dirname(currentFile), "..", "..");
   const prismaBin = path.join(projectRoot, "node_modules", ".bin", "prisma");
+  const nodeBin = process.execPath;
   const baseUrl = process.env.TEST_DATABASE_URL || process.env.DATABASE_URL;
 
   if (!baseUrl) {
@@ -49,8 +53,8 @@ export function resetIntegrationSchema() {
   adminUrl.searchParams.set("schema", "public");
 
   execFileSync(
-    prismaBin,
-    ["db", "execute", "--stdin", "--schema", "prisma/schema.prisma"],
+    nodeBin,
+    [prismaBin, "db", "execute", "--stdin", "--schema", "prisma/schema.prisma"],
     {
       cwd: projectRoot,
       env: {
@@ -62,12 +66,16 @@ export function resetIntegrationSchema() {
     }
   );
 
-  execFileSync(prismaBin, ["db", "push", "--accept-data-loss", "--skip-generate", "--schema", "prisma/schema.prisma"], {
-    cwd: projectRoot,
-    env: {
-      ...process.env,
-      DATABASE_URL: integrationDatabaseUrl
-    },
-    stdio: ["pipe", "pipe", "pipe"]
-  });
+  execFileSync(
+    nodeBin,
+    [prismaBin, "db", "push", "--accept-data-loss", "--skip-generate", "--schema", "prisma/schema.prisma"],
+    {
+      cwd: projectRoot,
+      env: {
+        ...process.env,
+        DATABASE_URL: integrationDatabaseUrl
+      },
+      stdio: ["pipe", "pipe", "pipe"]
+    }
+  );
 }

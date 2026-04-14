@@ -1,8 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { Route } from "next";
 
 import { TeamAvatar } from "@/components/shared";
-import { getMatchPostDetail } from "@/features/matchmaking";
+import { MatchInvitationPanel } from "@/features/matchmaking/match-invitation-panel";
+import { getMatchPostDetail, listMatchPostInvitations } from "@/features/matchmaking";
+import { getCurrentUser } from "@/lib/auth/current-user";
+import { listTeamsForUser } from "@/features/team-management/service";
 import { ApiError } from "@/lib/http";
 
 function formatFieldType(fieldType: "five" | "seven" | "eleven") {
@@ -32,6 +36,18 @@ export default async function MatchPostDetailPage({
   try {
     const { matchPostId } = await params;
     const matchPost = await getMatchPostDetail(matchPostId);
+    const currentUser = await getCurrentUser();
+    const userTeams = currentUser ? await listTeamsForUser(currentUser.id) : [];
+    const captainTeams = userTeams.filter((team) => team.role_of_current_user === "captain");
+    const eligibleInviterTeams = captainTeams
+      .filter((team) => team.id !== matchPost.team.id)
+      .map((team) => ({
+        id: team.id,
+        name: team.name,
+        short_code: team.short_code
+      }));
+    const isTargetCaptain = captainTeams.some((team) => team.id === matchPost.team.id);
+    const invitations = currentUser ? await listMatchPostInvitations(matchPostId, currentUser.id) : [];
 
     return (
       <main className="mx-auto flex min-h-screen max-w-5xl flex-col px-4 py-8 sm:px-6 lg:px-8">
@@ -92,7 +108,7 @@ export default async function MatchPostDetailPage({
                 {matchPost.team_skill_min} → {matchPost.team_skill_max}
               </p>
               <p className="mt-3 text-sm leading-6 text-[var(--ink-soft)]">
-                {matchPost.note || "Chưa có ghi chú chi tiết. Luồng invitation và chốt kèo sẽ bổ sung ở slice tiếp theo."}
+                {matchPost.note || "Chưa có ghi chú chi tiết cho kèo này."}
               </p>
             </div>
           </div>
@@ -125,9 +141,16 @@ export default async function MatchPostDetailPage({
             </dl>
 
             <div className="mt-6 flex flex-col gap-3">
-              <span className="rounded-2xl bg-[var(--brand)] px-4 py-3 text-center text-sm font-semibold text-white">
-                Chốt kèo sẽ bật ở slice invitation
-              </span>
+              {matchPost.scheduled_match ? (
+                <div className="rounded-2xl bg-[var(--brand)] px-4 py-3 text-sm font-semibold text-white">
+                  Đã chốt trận: {matchPost.scheduled_match.home_team?.name || "Đội nhà"} vs{" "}
+                  {matchPost.scheduled_match.away_team?.name || "Đội khách"}
+                </div>
+              ) : (
+                <span className="rounded-2xl bg-[var(--brand)] px-4 py-3 text-center text-sm font-semibold text-white">
+                  Đang chờ một lời mời được chấp nhận để tạo trận chính thức
+                </span>
+              )}
               <Link
                 href="/match/posts"
                 className="rounded-2xl border border-black/10 px-4 py-3 text-center text-sm font-semibold text-[var(--brand-strong)] transition hover:bg-white/70"
@@ -137,6 +160,63 @@ export default async function MatchPostDetailPage({
             </div>
           </aside>
         </section>
+
+        {matchPost.scheduled_match ? (
+          <section className="mt-6 surface-card rounded-[2rem] p-6">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--brand)]">Matched Fixture</p>
+            <h2 className="mt-2 font-[var(--font-headline)] text-2xl font-extrabold text-[var(--brand-strong)]">Kèo đã chốt</h2>
+            <div className="mt-5 grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
+              <div className="rounded-3xl bg-[var(--card-muted)] p-5">
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--brand)]">
+                  {matchPost.scheduled_match.status}
+                </p>
+                <p className="mt-2 text-lg font-bold text-[var(--brand-strong)]">
+                  {matchPost.scheduled_match.home_team?.name || "Đội nhà"} vs{" "}
+                  {matchPost.scheduled_match.away_team?.name || "Đội khách"}
+                </p>
+                <p className="mt-2 text-sm text-[var(--ink-soft)]">
+                  {matchPost.scheduled_match.date} • {matchPost.scheduled_match.start_time}
+                  {matchPost.scheduled_match.end_time ? ` - ${matchPost.scheduled_match.end_time}` : ""}
+                </p>
+                <p className="mt-1 text-sm text-[var(--ink-soft)]">
+                  {matchPost.scheduled_match.venue_name || "Chưa chốt sân"} • {formatFieldType(matchPost.scheduled_match.field_type)}
+                </p>
+              </div>
+              <div className="rounded-3xl bg-[var(--card-muted)] p-5">
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--brand)]">Participant Summary</p>
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                  <div className="rounded-2xl bg-white px-4 py-3">
+                    <p className="text-xs uppercase tracking-[0.2em] text-[var(--ink-soft)]">Confirmed</p>
+                    <p className="mt-1 text-2xl font-black text-[var(--brand-strong)]">
+                      {matchPost.scheduled_match.participant_summary.confirmed_count}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl bg-white px-4 py-3">
+                    <p className="text-xs uppercase tracking-[0.2em] text-[var(--ink-soft)]">Pending</p>
+                    <p className="mt-1 text-2xl font-black text-[var(--brand-strong)]">
+                      {matchPost.scheduled_match.participant_summary.pending_count}
+                    </p>
+                  </div>
+                </div>
+                <Link
+                  href={`/matches/${matchPost.scheduled_match.id}` as Route}
+                  className="mt-4 inline-flex rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm font-semibold text-[var(--brand-strong)] transition hover:bg-white/70"
+                >
+                  Xem trận đã chốt
+                </Link>
+              </div>
+            </div>
+          </section>
+        ) : null}
+
+        <MatchInvitationPanel
+          matchPostId={matchPostId}
+          matchPostStatus={matchPost.status}
+          targetTeamId={matchPost.team.id}
+          initialInvitations={invitations}
+          eligibleInviterTeams={eligibleInviterTeams}
+          isTargetCaptain={isTargetCaptain}
+        />
       </main>
     );
   } catch (error) {

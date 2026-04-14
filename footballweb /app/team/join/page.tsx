@@ -1,6 +1,4 @@
-import Link from "next/link";
-
-import { acceptTeamInviteAction } from "@/features/team-management/invite-actions";
+import { TeamJoinForm } from "@/features/team-management/team-join-form";
 
 export default async function TeamJoinPage({
   searchParams
@@ -21,35 +19,8 @@ export default async function TeamJoinPage({
           Nhập mã mời do captain tạo. Sau khi join thành công bạn sẽ được chuyển vào team dashboard.
         </p>
 
-        <form action={acceptTeamInviteAction} className="mt-8 grid gap-5">
-          <label className="grid gap-2 text-sm font-medium text-[var(--brand-strong)]">
-            Mã mời
-            <input
-              required
-              name="invite_code"
-              defaultValue={code}
-              placeholder="VPINV-XXXXXXXXXX"
-              className="rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm outline-none transition focus:border-[var(--brand)]"
-            />
-          </label>
-
-          <div className="flex flex-col gap-3 pt-2 sm:flex-row">
-            <button
-              type="submit"
-              className="rounded-2xl bg-[var(--brand)] px-5 py-3 text-sm font-bold text-white transition hover:translate-y-[-1px]"
-            >
-              Join ngay
-            </button>
-            <Link
-              href="/"
-              className="rounded-2xl border border-black/10 px-5 py-3 text-sm font-semibold text-[var(--brand-strong)] transition hover:bg-white/70"
-            >
-              Về trang chính
-            </Link>
-          </div>
-        </form>
+        <TeamJoinForm initialCode={code} />
       </div>
     </main>
   );
 }
-

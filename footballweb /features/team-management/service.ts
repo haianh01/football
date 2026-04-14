@@ -1,4 +1,4 @@
-import { InviteStatus, InviteType, TeamMemberStatus, TeamRole } from "@prisma/client";
+import { AttendanceStatus, InviteStatus, InviteType, MatchInvitationStatus, MatchStatus, TeamMemberStatus, TeamRole } from "@prisma/client";
 
 import { db } from "@/lib/db";
 import { ApiError } from "@/lib/http";
@@ -11,7 +11,8 @@ export type { CreateTeamInput };
 export async function listTeamsForUser(userId: string) {
   const memberships = await db.teamMember.findMany({
     where: {
-      user_id: userId
+      user_id: userId,
+      status: TeamMemberStatus.active
     },
     include: {
       team: {
@@ -180,7 +181,10 @@ export async function getTeamDashboard(teamId: string, currentUserId: string) {
     throw new ApiError(403, "FORBIDDEN", "You do not have access to this team.");
   }
 
-  const [teamDetail, members] = await Promise.all([
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const [teamDetail, members, pendingMatchInvitations, upcomingMatches] = await Promise.all([
     getTeamDetail(teamId, currentUserId),
     db.teamMember.findMany({
       where: {
@@ -196,6 +200,78 @@ export async function getTeamDashboard(teamId: string, currentUserId: string) {
         }
       },
       orderBy: [{ role: "asc" }, { joined_at: "asc" }]
+    }),
+    db.matchInvitation.findMany({
+      where: {
+        target_team_id: teamId,
+        status: MatchInvitationStatus.pending
+      },
+      include: {
+        inviter_team: {
+          select: {
+            id: true,
+            name: true,
+            short_code: true,
+            logo_url: true
+          }
+        },
+        match_post: {
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            date: true,
+            start_time: true,
+            venue_name: true
+          }
+        }
+      },
+      orderBy: [{ created_at: "desc" }],
+      take: 5
+    }),
+    db.match.findMany({
+      where: {
+        status: {
+          in: [MatchStatus.scheduled, MatchStatus.confirmed]
+        },
+        date: {
+          gte: today
+        },
+        OR: [
+          {
+            home_team_id: teamId
+          },
+          {
+            away_team_id: teamId
+          }
+        ]
+      },
+      include: {
+        home_team: {
+          select: {
+            id: true,
+            name: true,
+            short_code: true,
+            logo_url: true
+          }
+        },
+        away_team: {
+          select: {
+            id: true,
+            name: true,
+            short_code: true,
+            logo_url: true
+          }
+        },
+        match_participants: {
+          select: {
+            team_id: true,
+            attendance_status: true
+          }
+        }
+      },
+      orderBy: [{ date: "asc" }, { start_time: "asc" }],
+      take: 5
     })
   ]);
 
@@ -204,6 +280,40 @@ export async function getTeamDashboard(teamId: string, currentUserId: string) {
     activeMembers.length === 0
       ? 0
       : activeMembers.reduce((sum, member) => sum + Number(member.attendance_rate), 0) / activeMembers.length;
+  const availableParticipantStatuses = new Set<AttendanceStatus>([
+    AttendanceStatus.invited,
+    AttendanceStatus.confirmed,
+    AttendanceStatus.checked_in
+  ]);
+  const requiredPlayersByFieldType = {
+    five: 5,
+    seven: 7,
+    eleven: 11
+  } as const;
+  const upcomingMatchItems = upcomingMatches.map((match) => {
+    const requiredPlayers = requiredPlayersByFieldType[match.field_type];
+    const currentTeamAvailableCount = match.match_participants.filter(
+      (participant) => participant.team_id === teamId && availableParticipantStatuses.has(participant.attendance_status)
+    ).length;
+    const currentTeamShortage = Math.max(0, requiredPlayers - currentTeamAvailableCount);
+
+    return {
+      id: match.id,
+      source_match_post_id: match.source_match_post_id,
+      status: match.status,
+      date: match.date.toISOString().slice(0, 10),
+      start_time: match.start_time.toISOString().slice(11, 16),
+      end_time: match.end_time?.toISOString().slice(11, 16) ?? null,
+      venue_name: match.venue_name,
+      field_type: match.field_type,
+      home_team: match.home_team,
+      away_team: match.away_team,
+      current_team_available_count: currentTeamAvailableCount,
+      current_team_required_players: requiredPlayers,
+      current_team_shortage: currentTeamShortage
+    };
+  });
+  const upcomingMatchShortage = upcomingMatchItems.reduce((sum, match) => sum + match.current_team_shortage, 0);
 
   return {
     team_summary: {
@@ -216,12 +326,26 @@ export async function getTeamDashboard(teamId: string, currentUserId: string) {
       role_of_current_user: teamDetail.role_of_current_user
     },
     action_center: {
-      pending_confirmations: 0,
+      pending_confirmations: pendingMatchInvitations.length,
       open_polls: 0,
       overdue_fee_assignees: 0,
-      upcoming_match_shortage: 0
+      upcoming_match_shortage: upcomingMatchShortage
     },
-    upcoming_matches: [],
+    upcoming_matches: upcomingMatchItems,
+    pending_match_invitations: pendingMatchInvitations.map((invitation) => ({
+      id: invitation.id,
+      status: invitation.status,
+      created_at: invitation.created_at.toISOString(),
+      inviter_team: invitation.inviter_team,
+      match_post: {
+        id: invitation.match_post.id,
+        title: invitation.match_post.title,
+        status: invitation.match_post.status,
+        date: invitation.match_post.date.toISOString().slice(0, 10),
+        start_time: invitation.match_post.start_time.toISOString().slice(11, 16),
+        venue_name: invitation.match_post.venue_name
+      }
+    })),
     open_polls: [],
     open_fees: [],
     member_summary: {
@@ -307,6 +431,7 @@ export async function createTeamInvite(teamId: string, createdByUserId: string, 
   return {
     id: invite.id,
     team_id: invite.team_id,
+    invite_type: invite.invite_type,
     invite_code: invite.invite_code,
     status: invite.status,
     expires_at: invite.expires_at.toISOString(),

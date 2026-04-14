@@ -1,11 +1,19 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { Route } from "next";
 
 import { TeamAvatar } from "@/components/shared";
+import { TeamMatchInvitationInbox } from "@/features/matchmaking/team-match-invitation-inbox";
 import { requireCurrentUser } from "@/lib/auth/current-user";
 import { ApiError } from "@/lib/http";
-import { createTeamInviteAction, revokeTeamInviteAction } from "@/features/team-management/invite-actions";
 import { getTeamDashboard, listTeamInvites } from "@/features/team-management/service";
+import { TeamInvitePanel } from "@/features/team-management/team-invite-panel";
+
+function formatFieldType(fieldType: "five" | "seven" | "eleven") {
+  if (fieldType === "five") return "Sân 5";
+  if (fieldType === "seven") return "Sân 7";
+  return "Sân 11";
+}
 
 export default async function TeamDashboardPage({
   params
@@ -36,8 +44,7 @@ export default async function TeamDashboardPage({
                   {dashboard.team_summary.name}
                 </h1>
                 <p className="mt-3 text-sm leading-6 text-[var(--ink-soft)]">
-                  Captain flow đã sẵn sàng: đội được tạo, membership được gán và dashboard cơ bản đã có action center để tiếp tục sang
-                  matchmaking, poll và finance.
+                  Dashboard đã nối được luồng tạo đội, mời thành viên, lời mời chốt kèo và trận đã chốt để đội trưởng theo dõi ở một chỗ.
                 </p>
               </div>
             </div>
@@ -80,6 +87,7 @@ export default async function TeamDashboardPage({
                 <p className="mt-3 font-[var(--font-headline)] text-4xl font-black text-[var(--brand-strong)]">
                   {dashboard.action_center.upcoming_match_shortage}
                 </p>
+                <p className="mt-2 text-xs leading-5 text-[var(--ink-soft)]">Số cầu thủ còn thiếu để đủ quân cho các trận sắp tới.</p>
               </article>
             </div>
           </div>
@@ -135,74 +143,60 @@ export default async function TeamDashboardPage({
             </div>
 
             {dashboard.team_summary.role_of_current_user === "captain" ? (
-              <section className="mt-8 rounded-3xl border border-black/8 bg-white p-5">
-                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--brand)]">Team Invite</p>
-                <h3 className="mt-2 font-[var(--font-headline)] text-xl font-extrabold text-[var(--brand-strong)]">
-                  Mời thành viên
-                </h3>
-                <p className="mt-2 text-sm leading-6 text-[var(--ink-soft)]">
-                  Tạo mã mời để thành viên khác join team. Slice này ưu tiên code-based invite (link join dùng chung code).
-                </p>
-
-                <form action={createTeamInviteAction} className="mt-4">
-                  <input type="hidden" name="team_id" value={teamId} />
-                  <button
-                    type="submit"
-                    className="w-full rounded-2xl bg-[var(--brand-strong)] px-4 py-3 text-sm font-semibold text-white transition hover:translate-y-[-1px]"
-                  >
-                    Tạo mã mời
-                  </button>
-                </form>
-
-                <div className="mt-5 grid gap-3">
-                  {invites.length === 0 ? (
-                    <p className="rounded-2xl bg-[var(--card-muted)] px-4 py-3 text-sm text-[var(--ink-soft)]">
-                      Chưa có mã mời nào. Nhấn “Tạo mã mời” để tạo mới.
-                    </p>
-                  ) : (
-                    invites.map((invite) => (
-                      <article key={invite.id} className="rounded-2xl bg-[var(--card-muted)] p-4">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--brand)]">
-                              {invite.status}
-                            </p>
-                            <p className="mt-2 text-sm font-semibold text-[var(--brand-strong)]">Mã mời</p>
-                            <input
-                              readOnly
-                              value={invite.invite_code}
-                              className="mt-2 w-full rounded-2xl border border-black/10 bg-white px-3 py-2 text-sm font-semibold text-[var(--brand-strong)]"
-                              aria-label="Mã mời"
-                            />
-                            <p className="mt-2 text-xs text-[var(--ink-soft)]">Hết hạn: {new Date(invite.expires_at).toLocaleString("vi-VN")}</p>
-                            <Link
-                              href={`/team/join?code=${encodeURIComponent(invite.invite_code)}`}
-                              className="mt-3 inline-flex rounded-2xl border border-black/10 bg-white px-3 py-2 text-xs font-semibold text-[var(--brand-strong)] transition hover:bg-white/70"
-                            >
-                              Mở link join
-                            </Link>
-                          </div>
-
-                          {invite.status === "pending" ? (
-                            <form action={revokeTeamInviteAction}>
-                              <input type="hidden" name="team_id" value={teamId} />
-                              <input type="hidden" name="invite_id" value={invite.id} />
-                              <button
-                                type="submit"
-                                className="rounded-2xl border border-black/10 bg-white px-3 py-2 text-xs font-semibold text-[var(--brand-strong)] transition hover:bg-white/70"
-                              >
-                                Thu hồi
-                              </button>
-                            </form>
-                          ) : null}
-                        </div>
-                      </article>
-                    ))
-                  )}
-                </div>
-              </section>
+              <TeamInvitePanel teamId={teamId} initialInvites={invites} />
             ) : null}
           </aside>
+        </section>
+
+        <section className="mt-6 surface-card rounded-[2rem] p-6">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--brand)]">Upcoming Matches</p>
+              <h2 className="mt-2 font-[var(--font-headline)] text-2xl font-extrabold text-[var(--brand-strong)]">Trận đã chốt</h2>
+            </div>
+            <span className="rounded-full bg-[var(--card-muted)] px-3 py-1 text-xs font-semibold text-[var(--brand)]">
+              {dashboard.upcoming_matches.length} fixtures
+            </span>
+          </div>
+
+          <div className="mt-6 grid gap-4 lg:grid-cols-2">
+            {dashboard.upcoming_matches.length === 0 ? (
+              <div className="rounded-3xl bg-[var(--card-muted)] px-4 py-4 text-sm text-[var(--ink-soft)] lg:col-span-2">
+                Chưa có trận nào được chốt từ lời mời hiện tại.
+              </div>
+            ) : (
+              dashboard.upcoming_matches.map((match) => {
+                const opponent = match.home_team?.id === teamId ? match.away_team : match.home_team;
+
+                return (
+                  <article key={match.id} className="rounded-3xl bg-[var(--card-muted)] p-5">
+                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--brand)]">{match.status}</p>
+                    <h3 className="mt-2 text-lg font-bold text-[var(--brand-strong)]">
+                      {opponent ? `vs ${opponent.name}` : "Đối thủ đang cập nhật"}
+                    </h3>
+                    <p className="mt-1 text-sm text-[var(--ink-soft)]">
+                      {match.date} • {match.start_time}
+                      {match.end_time ? ` - ${match.end_time}` : ""}
+                    </p>
+                    <p className="mt-1 text-sm text-[var(--ink-soft)]">
+                      {match.venue_name || "Chưa chốt sân"} • {formatFieldType(match.field_type)}
+                    </p>
+                    <p className="mt-2 text-sm font-medium text-[var(--brand-strong)]">
+                      {match.current_team_shortage > 0
+                        ? `Thiếu ${match.current_team_shortage} người • ${match.current_team_available_count}/${match.current_team_required_players} khả dụng`
+                        : `Đủ quân sơ bộ • ${match.current_team_available_count}/${match.current_team_required_players} khả dụng`}
+                    </p>
+                    <Link
+                      href={`/matches/${match.id}` as Route}
+                      className="mt-4 inline-flex rounded-2xl border border-black/10 bg-white px-4 py-2 text-sm font-semibold text-[var(--brand-strong)] transition hover:bg-white/70"
+                    >
+                      Xem trận
+                    </Link>
+                  </article>
+                );
+              })
+            )}
+          </div>
         </section>
 
         <section className="mt-6 surface-card rounded-[2rem] p-6">
@@ -244,6 +238,10 @@ export default async function TeamDashboardPage({
             ))}
           </div>
         </section>
+
+        {dashboard.team_summary.role_of_current_user === "captain" ? (
+          <TeamMatchInvitationInbox initialInvitations={dashboard.pending_match_invitations} />
+        ) : null}
       </main>
     );
   } catch (error) {
