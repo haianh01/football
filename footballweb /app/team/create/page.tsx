@@ -1,8 +1,11 @@
 import Link from "next/link";
 
 import { TeamCreateForm } from "@/features/team-management/team-create-form";
+import { requirePageUser } from "@/lib/auth/current-user";
 
-export default function CreateTeamPage() {
+export default async function CreateTeamPage() {
+  await requirePageUser("/login?redirectTo=/team/create");
+
   return (
     <main className="mx-auto flex min-h-screen max-w-3xl flex-col px-4 py-10 sm:px-6">
       <div className="surface-card rounded-[2rem] p-6 sm:p-8">

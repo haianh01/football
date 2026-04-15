@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { ApiError } from "@/lib/http";
 
-import { parseCreateTeamInput } from "./validation";
+import { parseCreateTeamInput, parseUpdateTeamInput, parseUpdateTeamMemberInput } from "./validation";
 
 describe("parseCreateTeamInput", () => {
   it("parses valid input and trims values", () => {
@@ -43,6 +43,48 @@ describe("parseCreateTeamInput", () => {
       parseCreateTeamInput({
         name: "FC Warriors",
         skill_level_code: "PRO"
+      })
+    ).toThrowError(ApiError);
+  });
+});
+
+describe("parseUpdateTeamInput", () => {
+  it("parses partial team updates", () => {
+    const result = parseUpdateTeamInput({
+      name: "  FC Updated  ",
+      description: "  Đội đá tối thứ 5  ",
+      home_city_code: " HN "
+    });
+
+    expect(result).toEqual({
+      name: "FC Updated",
+      description: "Đội đá tối thứ 5",
+      home_city_code: "HN"
+    });
+  });
+
+  it("throws when no editable fields are provided", () => {
+    expect(() => parseUpdateTeamInput({})).toThrowError(ApiError);
+  });
+});
+
+describe("parseUpdateTeamMemberInput", () => {
+  it("parses role and status updates", () => {
+    const result = parseUpdateTeamMemberInput({
+      role: " treasurer ",
+      status: " removed "
+    });
+
+    expect(result).toEqual({
+      role: "treasurer",
+      status: "removed"
+    });
+  });
+
+  it("throws when role is invalid", () => {
+    expect(() =>
+      parseUpdateTeamMemberInput({
+        role: "coach"
       })
     ).toThrowError(ApiError);
   });

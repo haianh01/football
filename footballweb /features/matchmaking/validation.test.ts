@@ -2,7 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import { ApiError } from "@/lib/http";
 
-import { parseCreateMatchPostInput, parseDateOnly, parseTimeOnly } from "./validation";
+import {
+  parseCreateMatchPostInput,
+  parseDateOnly,
+  parseTimeOnly,
+  parseUpdateMatchInput,
+  parseUpdateMatchParticipantStatsInput
+} from "./validation";
 
 describe("matchmaking validation", () => {
   it("parses valid match post input", () => {
@@ -58,5 +64,45 @@ describe("matchmaking validation", () => {
 
   it("throws on invalid time", () => {
     expect(() => parseTimeOnly("", "Start time")).toThrowError(ApiError);
+  });
+
+  it("parses valid match update input", () => {
+    const result = parseUpdateMatchInput({
+      status: "completed",
+      home_score: " 4 ",
+      away_score: 2,
+      result_note: "  Đá khá ổn ",
+      venue_name: " Sân Mỹ Đình "
+    });
+
+    expect(result).toEqual({
+      status: "completed",
+      home_score: 4,
+      away_score: 2,
+      result_note: "Đá khá ổn",
+      venue_name: "Sân Mỹ Đình"
+    });
+  });
+
+  it("throws on invalid match update status", () => {
+    expect(() => parseUpdateMatchInput({ status: "postponed" })).toThrowError(ApiError);
+  });
+
+  it("parses valid participant stats update input", () => {
+    const result = parseUpdateMatchParticipantStatsInput({
+      goals: "2",
+      assists: 1,
+      is_mvp: "true"
+    });
+
+    expect(result).toEqual({
+      goals: 2,
+      assists: 1,
+      is_mvp: true
+    });
+  });
+
+  it("throws on invalid participant stats", () => {
+    expect(() => parseUpdateMatchParticipantStatsInput({ goals: -1 })).toThrowError(ApiError);
   });
 });

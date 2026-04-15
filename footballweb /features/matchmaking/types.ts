@@ -46,15 +46,59 @@ export type MatchInvitationDashboardItem = {
   };
 };
 
-export type MatchInvitationApiSuccess<T> = {
+export type MatchApiSuccess<T> = {
   data: T;
 };
 
-export type MatchInvitationApiFailure = {
+export type MatchApiFailure = {
   error?: {
     code?: string;
     message?: string;
     details?: unknown;
+  };
+};
+
+export type MatchInvitationApiSuccess<T> = MatchApiSuccess<T>;
+
+export type MatchInvitationApiFailure = MatchApiFailure;
+
+export type MatchSummary = {
+  id: string;
+  source_match_post_id: string | null;
+  status: "scheduled" | "confirmed" | "completed" | "cancelled";
+  match_type: "friendly" | "tactical" | "mini_tournament";
+  home_score: number | null;
+  away_score: number | null;
+  result_note: string | null;
+  completed_at: string | null;
+  cancelled_at: string | null;
+  date: string;
+  start_time: string;
+  end_time: string | null;
+  timezone: string;
+  country_code: string;
+  state_code: string | null;
+  city_code: string | null;
+  district_code: string | null;
+  venue_name: string | null;
+  venue_address: string | null;
+  field_type: "five" | "seven" | "eleven";
+  currency_code: string;
+  home_team: {
+    id: string;
+    name: string;
+    short_code: string;
+    logo_url: string | null;
+  } | null;
+  away_team: {
+    id: string;
+    name: string;
+    short_code: string;
+    logo_url: string | null;
+  } | null;
+  participant_summary: {
+    confirmed_count: number;
+    pending_count: number;
   };
 };
 
@@ -66,6 +110,9 @@ export type MatchParticipantSummary = {
   source_type: "team_member" | "freelance_player" | "guest";
   role: "player" | "captain" | "goalkeeper" | "manager";
   attendance_status: "invited" | "confirmed" | "declined" | "checked_in" | "absent";
+  goals: number;
+  assists: number;
+  is_mvp: boolean;
   position_code: string | null;
   created_at: string;
   updated_at: string;

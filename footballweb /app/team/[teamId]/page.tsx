@@ -4,7 +4,9 @@ import type { Route } from "next";
 
 import { TeamAvatar } from "@/components/shared";
 import { TeamMatchInvitationInbox } from "@/features/matchmaking/team-match-invitation-inbox";
-import { requireCurrentUser } from "@/lib/auth/current-user";
+import { TeamMemberPanel } from "@/features/team-management/team-member-panel";
+import { TeamSettingsPanel } from "@/features/team-management/team-settings-panel";
+import { requirePageUser } from "@/lib/auth/current-user";
 import { ApiError } from "@/lib/http";
 import { getTeamDashboard, listTeamInvites } from "@/features/team-management/service";
 import { TeamInvitePanel } from "@/features/team-management/team-invite-panel";
@@ -23,7 +25,7 @@ export default async function TeamDashboardPage({
   const { teamId } = await params;
 
   try {
-    const currentUser = await requireCurrentUser();
+    const currentUser = await requirePageUser(`/login?redirectTo=/team/${teamId}`);
     const dashboard = await getTeamDashboard(teamId, currentUser.id);
     const invites =
       dashboard.team_summary.role_of_current_user === "captain" ? await listTeamInvites(teamId, currentUser.id) : [];
@@ -143,7 +145,10 @@ export default async function TeamDashboardPage({
             </div>
 
             {dashboard.team_summary.role_of_current_user === "captain" ? (
-              <TeamInvitePanel teamId={teamId} initialInvites={invites} />
+              <>
+                <TeamSettingsPanel teamId={teamId} initialTeam={dashboard.team_summary} />
+                <TeamInvitePanel teamId={teamId} initialInvites={invites} />
+              </>
             ) : null}
           </aside>
         </section>
@@ -199,45 +204,12 @@ export default async function TeamDashboardPage({
           </div>
         </section>
 
-        <section className="mt-6 surface-card rounded-[2rem] p-6">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--brand)]">Members</p>
-              <h2 className="mt-2 font-[var(--font-headline)] text-2xl font-extrabold text-[var(--brand-strong)]">
-                Danh sách thành viên
-              </h2>
-            </div>
-            <span className="rounded-full bg-[var(--card-muted)] px-3 py-1 text-xs font-semibold text-[var(--brand)]">
-              {dashboard.members.length} records
-            </span>
-          </div>
-
-          <div className="mt-6 overflow-hidden rounded-3xl border border-black/8 bg-white">
-            <div className="grid grid-cols-[1.5fr_0.8fr_0.8fr_0.8fr] gap-3 border-b border-black/8 px-4 py-3 text-xs font-semibold uppercase tracking-[0.24em] text-[var(--ink-soft)]">
-              <span>Thành viên</span>
-              <span>Role</span>
-              <span>Attendance</span>
-              <span>Công nợ</span>
-            </div>
-
-            {dashboard.members.map((member) => (
-              <div
-                key={member.id}
-                className="grid grid-cols-[1.5fr_0.8fr_0.8fr_0.8fr] gap-3 border-b border-black/6 px-4 py-4 text-sm last:border-b-0"
-              >
-                <div>
-                  <p className="font-semibold text-[var(--brand-strong)]">{member.display_name}</p>
-                  <p className="mt-1 text-xs text-[var(--ink-soft)]">{member.status}</p>
-                </div>
-                <span className="font-semibold uppercase text-[var(--brand)]">{member.role}</span>
-                <span className="font-medium text-[var(--brand-strong)]">{member.attendance_rate}%</span>
-                <span className="font-medium text-[var(--brand-strong)]">
-                  {member.current_debt_amount_minor.toLocaleString("vi-VN")} {member.currency_code}
-                </span>
-              </div>
-            ))}
-          </div>
-        </section>
+        <TeamMemberPanel
+          teamId={teamId}
+          currentUserId={currentUser.id}
+          currentUserRole={dashboard.team_summary.role_of_current_user}
+          initialMembers={dashboard.members}
+        />
 
         {dashboard.team_summary.role_of_current_user === "captain" ? (
           <TeamMatchInvitationInbox initialInvitations={dashboard.pending_match_invitations} />

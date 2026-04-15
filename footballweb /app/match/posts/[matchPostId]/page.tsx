@@ -15,6 +15,13 @@ function formatFieldType(fieldType: "five" | "seven" | "eleven") {
   return "Sân 11";
 }
 
+function formatMatchStatus(status: "scheduled" | "confirmed" | "completed" | "cancelled") {
+  if (status === "scheduled") return "Scheduled";
+  if (status === "confirmed") return "Confirmed";
+  if (status === "completed") return "Completed";
+  return "Cancelled";
+}
+
 function formatPitchFeeRule(rule: "share" | "home_team_pays" | "away_team_pays" | "sponsor_supported") {
   switch (rule) {
     case "share":
@@ -48,6 +55,8 @@ export default async function MatchPostDetailPage({
       }));
     const isTargetCaptain = captainTeams.some((team) => team.id === matchPost.team.id);
     const invitations = currentUser ? await listMatchPostInvitations(matchPostId, currentUser.id) : [];
+    const scheduledMatchHasScoreline =
+      matchPost.scheduled_match?.home_score !== null && matchPost.scheduled_match?.away_score !== null;
 
     return (
       <main className="mx-auto flex min-h-screen max-w-5xl flex-col px-4 py-8 sm:px-6 lg:px-8">
@@ -145,6 +154,9 @@ export default async function MatchPostDetailPage({
                 <div className="rounded-2xl bg-[var(--brand)] px-4 py-3 text-sm font-semibold text-white">
                   Đã chốt trận: {matchPost.scheduled_match.home_team?.name || "Đội nhà"} vs{" "}
                   {matchPost.scheduled_match.away_team?.name || "Đội khách"}
+                  {scheduledMatchHasScoreline
+                    ? ` • ${matchPost.scheduled_match.home_score} - ${matchPost.scheduled_match.away_score}`
+                    : ""}
                 </div>
               ) : (
                 <span className="rounded-2xl bg-[var(--brand)] px-4 py-3 text-center text-sm font-semibold text-white">
@@ -168,12 +180,17 @@ export default async function MatchPostDetailPage({
             <div className="mt-5 grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
               <div className="rounded-3xl bg-[var(--card-muted)] p-5">
                 <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--brand)]">
-                  {matchPost.scheduled_match.status}
+                  {formatMatchStatus(matchPost.scheduled_match.status)}
                 </p>
                 <p className="mt-2 text-lg font-bold text-[var(--brand-strong)]">
                   {matchPost.scheduled_match.home_team?.name || "Đội nhà"} vs{" "}
                   {matchPost.scheduled_match.away_team?.name || "Đội khách"}
                 </p>
+                {scheduledMatchHasScoreline ? (
+                  <p className="mt-3 text-3xl font-black text-[var(--brand-strong)]">
+                    {matchPost.scheduled_match.home_score} - {matchPost.scheduled_match.away_score}
+                  </p>
+                ) : null}
                 <p className="mt-2 text-sm text-[var(--ink-soft)]">
                   {matchPost.scheduled_match.date} • {matchPost.scheduled_match.start_time}
                   {matchPost.scheduled_match.end_time ? ` - ${matchPost.scheduled_match.end_time}` : ""}
@@ -181,6 +198,9 @@ export default async function MatchPostDetailPage({
                 <p className="mt-1 text-sm text-[var(--ink-soft)]">
                   {matchPost.scheduled_match.venue_name || "Chưa chốt sân"} • {formatFieldType(matchPost.scheduled_match.field_type)}
                 </p>
+                {matchPost.scheduled_match.result_note ? (
+                  <p className="mt-3 text-sm leading-6 text-[var(--ink-soft)]">{matchPost.scheduled_match.result_note}</p>
+                ) : null}
               </div>
               <div className="rounded-3xl bg-[var(--card-muted)] p-5">
                 <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--brand)]">Participant Summary</p>

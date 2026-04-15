@@ -1,39 +1,13 @@
 import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
-import { db } from "@/lib/db";
 import { ApiError } from "@/lib/http";
+import { db } from "@/lib/db";
+import { ensureUserByEmail } from "@/lib/auth/user-provisioning";
 
 const DEFAULT_DEV_EMAIL = "captain@vpitch.local";
 const DEFAULT_DEV_NAME = "V-Pitch Captain";
-
-async function ensureDevUserByEmail(email: string, displayName: string) {
-  const user = await db.user.upsert({
-    where: {
-      email
-    },
-    update: {},
-    create: {
-      email,
-      display_name: displayName,
-      preferred_locale: "vi-VN",
-      timezone: "Asia/Ho_Chi_Minh",
-      country_code: "VN"
-    }
-  });
-
-  await db.userPreference.upsert({
-    where: {
-      user_id: user.id
-    },
-    update: {},
-    create: {
-      user_id: user.id
-    }
-  });
-
-  return user;
-}
 
 async function getDevelopmentUser() {
   if (process.env.NODE_ENV === "production") {
@@ -42,9 +16,14 @@ async function getDevelopmentUser() {
 
   const requestHeaders = await headers();
   const demoUserId = requestHeaders.get("x-demo-user-id");
-  const demoUserEmail =
-    requestHeaders.get("x-demo-user-email") ?? process.env.DEV_USER_EMAIL ?? DEFAULT_DEV_EMAIL;
-  const demoUserName = process.env.DEV_USER_NAME ?? DEFAULT_DEV_NAME;
+  const headerDemoEmail = requestHeaders.get("x-demo-user-email");
+  const explicitDemoEmail = headerDemoEmail ?? process.env.DEV_AUTH_BYPASS_EMAIL ?? null;
+  const demoUserName =
+    requestHeaders.get("x-demo-user-name") ?? process.env.DEV_USER_NAME ?? DEFAULT_DEV_NAME;
+
+  if (!demoUserId && !explicitDemoEmail) {
+    return null;
+  }
 
   if (demoUserId) {
     const existingUser = await db.user.findUnique({
@@ -58,7 +37,7 @@ async function getDevelopmentUser() {
     }
   }
 
-  return ensureDevUserByEmail(demoUserEmail, demoUserName);
+  return ensureUserByEmail(explicitDemoEmail ?? DEFAULT_DEV_EMAIL, demoUserName);
 }
 
 export async function getCurrentUser() {
@@ -105,6 +84,16 @@ export async function requireCurrentUser() {
 
   if (!user) {
     throw new ApiError(401, "UNAUTHORIZED", "Authentication is required.");
+  }
+
+  return user;
+}
+
+export async function requirePageUser(redirectTo = "/login") {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    redirect(redirectTo as never);
   }
 
   return user;

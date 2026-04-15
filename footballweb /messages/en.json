@@ -2,18 +2,18 @@
   "Home": {
     "eyebrow": "Foundation Phase",
     "title": "V-Pitch",
-    "loginCta": "Auth Stub",
+    "loginCta": "Sign In",
     "hero": {
       "label": "Technical scaffold",
       "title": "Start from the right foundation instead of jumping straight into the landing page.",
-      "body": "The repo now has a Next.js App Router shell, strict TypeScript, Tailwind foundation, next-intl, an Auth.js stub, a Prisma skeleton and domain folders to move into Auth -> Team -> Dashboard.",
+      "body": "The repo now has a Next.js App Router shell, strict TypeScript, Tailwind foundation, next-intl, an email-based auth session, a Prisma skeleton and domain folders to move into Team -> Match -> Dashboard.",
       "primaryCta": "Create the first team",
       "secondaryCta": "View foundation"
     },
     "foundation": {
       "label": "Technical Base",
       "title": "Step 1 is scaffolded",
-      "badge": "Ready for Auth"
+      "badge": "Auth Enabled"
     },
     "stack": {
       "label": "Stack",
@@ -30,11 +30,11 @@
     }
   },
   "Login": {
-    "label": "Auth Placeholder",
-    "title": "The login screen will be wired in the next step",
-    "body": "Real auth is not finished yet. In development, the API and team flow currently rely on a dev fallback user so the Team slice can move forward now.",
-    "placeholderTitle": "Ready for step 2",
-    "placeholderBody": "From here, the next move is Auth APIs, user creation, team creation and the first team dashboard.",
+    "label": "Auth",
+    "title": "Sign in to continue into the football team workflow",
+    "body": "The current build supports an email-based session and can optionally enable Google OAuth. This replaces the previous auth placeholder with a usable in-app flow.",
+    "placeholderTitle": "Minimal sign-in",
+    "placeholderBody": "Enter an email to sign in, or continue with Google when the provider is configured. If the user does not exist yet, the app will provision a basic profile, user identity, user preference, and session.",
     "backCta": "Back to home"
   }
 }

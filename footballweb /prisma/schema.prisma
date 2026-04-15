@@ -217,6 +217,11 @@ model Match {
   away_team_id         String?     @db.Uuid
   match_type           MatchType   @default(friendly)
   status               MatchStatus @default(scheduled)
+  home_score           Int?
+  away_score           Int?
+  result_note          String?
+  completed_at         DateTime?   @db.Timestamptz(6)
+  cancelled_at         DateTime?   @db.Timestamptz(6)
   date                 DateTime    @db.Date
   start_time           DateTime    @db.Time(6)
   end_time             DateTime?   @db.Time(6)
@@ -253,6 +258,9 @@ model MatchParticipant {
   source_type       ParticipantSourceType
   role              ParticipantRole       @default(player)
   attendance_status AttendanceStatus      @default(invited)
+  goals             Int                   @default(0)
+  assists           Int                   @default(0)
+  is_mvp            Boolean               @default(false)
   position_code     PositionCode?
   created_at        DateTime              @default(now()) @db.Timestamptz(6)
   updated_at        DateTime              @updatedAt @db.Timestamptz(6)

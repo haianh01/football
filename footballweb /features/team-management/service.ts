@@ -1,12 +1,47 @@
 import { AttendanceStatus, InviteStatus, InviteType, MatchInvitationStatus, MatchStatus, TeamMemberStatus, TeamRole } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 
 import { db } from "@/lib/db";
 import { ApiError } from "@/lib/http";
 import { slugify } from "@/lib/slug";
-import { CreateTeamInput, parseCreateTeamInput } from "./validation";
+import {
+  CreateTeamInput,
+  UpdateTeamInput,
+  UpdateTeamMemberInput,
+  parseCreateTeamInput,
+  parseUpdateTeamInput,
+  parseUpdateTeamMemberInput
+} from "./validation";
 
-export { parseCreateTeamInput };
-export type { CreateTeamInput };
+export { parseCreateTeamInput, parseUpdateTeamInput, parseUpdateTeamMemberInput };
+export type { CreateTeamInput, UpdateTeamInput, UpdateTeamMemberInput };
+
+type TeamMemberWithUser = Prisma.TeamMemberGetPayload<{
+  include: {
+    user: {
+      select: {
+        id: true;
+        display_name: true;
+        avatar_url: true;
+      };
+    };
+  };
+}>;
+
+function buildTeamMemberSummary(member: TeamMemberWithUser) {
+  return {
+    id: member.id,
+    user_id: member.user_id,
+    display_name: member.user.display_name,
+    avatar_url: member.user.avatar_url,
+    role: member.role,
+    status: member.status,
+    attendance_rate: Number(member.attendance_rate),
+    current_debt_amount_minor: Number(member.current_debt_amount_minor),
+    currency_code: member.currency_code,
+    joined_at: member.joined_at.toISOString()
+  };
+}
 
 export async function listTeamsForUser(userId: string) {
   const memberships = await db.teamMember.findMany({
@@ -124,12 +159,11 @@ export async function createTeam(input: CreateTeamInput, createdByUserId: string
 }
 
 export async function getTeamMembership(teamId: string, userId: string) {
-  return db.teamMember.findUnique({
+  return db.teamMember.findFirst({
     where: {
-      team_id_user_id: {
-        team_id: teamId,
-        user_id: userId
-      }
+      team_id: teamId,
+      user_id: userId,
+      status: TeamMemberStatus.active
     }
   });
 }
@@ -161,8 +195,13 @@ export async function getTeamDetail(teamId: string, currentUserId?: string) {
     short_code: team.short_code,
     logo_url: team.logo_url,
     description: team.description,
+    home_city_code: team.home_city_code,
+    home_district_code: team.home_district_code,
     skill_level_code: team.skill_level_code,
     default_locale: team.default_locale,
+    play_style_code: team.play_style_code,
+    primary_color: team.primary_color,
+    secondary_color: team.secondary_color,
     member_count: team._count.team_members,
     role_of_current_user: membership?.role ?? null,
     reputation: {
@@ -321,7 +360,13 @@ export async function getTeamDashboard(teamId: string, currentUserId: string) {
       name: teamDetail.name,
       short_code: teamDetail.short_code,
       logo_url: teamDetail.logo_url,
+      description: teamDetail.description,
+      home_city_code: teamDetail.home_city_code,
+      home_district_code: teamDetail.home_district_code,
       skill_level_code: teamDetail.skill_level_code,
+      play_style_code: teamDetail.play_style_code,
+      primary_color: teamDetail.primary_color,
+      secondary_color: teamDetail.secondary_color,
       member_count: teamDetail.member_count,
       role_of_current_user: teamDetail.role_of_current_user
     },
@@ -352,19 +397,44 @@ export async function getTeamDashboard(teamId: string, currentUserId: string) {
       active_members: activeMembers.length,
       average_attendance_rate: Number(averageAttendanceRate.toFixed(1))
     },
-    members: members.map((member) => ({
-      id: member.id,
-      user_id: member.user_id,
-      display_name: member.user.display_name,
-      avatar_url: member.user.avatar_url,
-      role: member.role,
-      status: member.status,
-      attendance_rate: Number(member.attendance_rate),
-      current_debt_amount_minor: Number(member.current_debt_amount_minor),
-      currency_code: member.currency_code,
-      joined_at: member.joined_at.toISOString()
-    }))
+    members: members.map((member) => buildTeamMemberSummary(member))
   };
+}
+
+export async function updateTeam(teamId: string, currentUserId: string, input: UpdateTeamInput) {
+  await requireTeamCaptainAccess(teamId, currentUserId);
+
+  const existingTeam = await db.team.findUnique({
+    where: {
+      id: teamId
+    },
+    select: {
+      id: true
+    }
+  });
+
+  if (!existingTeam) {
+    throw new ApiError(404, "NOT_FOUND", "Team not found.");
+  }
+
+  await db.team.update({
+    where: {
+      id: teamId
+    },
+    data: {
+      name: input.name,
+      logo_url: input.logo_url,
+      description: input.description,
+      home_city_code: input.home_city_code,
+      home_district_code: input.home_district_code,
+      skill_level_code: input.skill_level_code,
+      play_style_code: input.play_style_code,
+      primary_color: input.primary_color,
+      secondary_color: input.secondary_color
+    }
+  });
+
+  return getTeamDetail(teamId, currentUserId);
 }
 
 async function requireTeamCaptainAccess(teamId: string, userId: string) {
@@ -386,6 +456,118 @@ async function requireTeamCaptainAccess(teamId: string, userId: string) {
   }
 
   return membership;
+}
+
+async function countOtherActiveCaptains(teamId: string, excludedMemberId: string) {
+  return db.teamMember.count({
+    where: {
+      team_id: teamId,
+      status: TeamMemberStatus.active,
+      role: TeamRole.captain,
+      NOT: {
+        id: excludedMemberId
+      }
+    }
+  });
+}
+
+export async function updateTeamMember(
+  teamId: string,
+  memberId: string,
+  currentUserId: string,
+  input: UpdateTeamMemberInput
+) {
+  const [requestMembership, member] = await Promise.all([
+    db.teamMember.findFirst({
+      where: {
+        team_id: teamId,
+        user_id: currentUserId,
+        status: TeamMemberStatus.active
+      },
+      select: {
+        id: true,
+        user_id: true,
+        role: true,
+        status: true
+      }
+    }),
+    db.teamMember.findUnique({
+      where: {
+        id: memberId
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            display_name: true,
+            avatar_url: true
+          }
+        }
+      }
+    })
+  ]);
+
+  if (!member || member.team_id !== teamId) {
+    throw new ApiError(404, "NOT_FOUND", "Team member not found.");
+  }
+
+  if (!requestMembership) {
+    throw new ApiError(403, "FORBIDDEN", "You do not have access to this team.");
+  }
+
+  const isSelf = member.user_id === currentUserId;
+
+  if (isSelf) {
+    if (input.role) {
+      throw new ApiError(403, "FORBIDDEN", "You cannot change your own role.");
+    }
+
+    if (input.status !== TeamMemberStatus.inactive) {
+      throw new ApiError(403, "FORBIDDEN", "You can only leave the team yourself.");
+    }
+  } else if (requestMembership.role !== TeamRole.captain) {
+    throw new ApiError(403, "FORBIDDEN", "Captain permission is required.");
+  }
+
+  const nextRole = (input.role as TeamRole | undefined) ?? member.role;
+  const nextStatus = (input.status as TeamMemberStatus | undefined) ?? member.status;
+
+  if (
+    member.role === TeamRole.captain &&
+    member.status === TeamMemberStatus.active &&
+    (nextRole !== TeamRole.captain || nextStatus !== TeamMemberStatus.active)
+  ) {
+    const otherCaptains = await countOtherActiveCaptains(teamId, member.id);
+
+    if (otherCaptains === 0) {
+      throw new ApiError(409, "CONFLICT", "Assign another active captain before changing the last captain.");
+    }
+  }
+
+  if (nextRole === member.role && nextStatus === member.status) {
+    return buildTeamMemberSummary(member);
+  }
+
+  const updatedMember = await db.teamMember.update({
+    where: {
+      id: memberId
+    },
+    data: {
+      role: nextRole,
+      status: nextStatus
+    },
+    include: {
+      user: {
+        select: {
+          id: true,
+          display_name: true,
+          avatar_url: true
+        }
+      }
+    }
+  });
+
+  return buildTeamMemberSummary(updatedMember);
 }
 
 async function createUniqueInviteCode(prefix = "VPINV") {

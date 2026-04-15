@@ -17,6 +17,14 @@ function readApiErrorMessage(payload: MatchInvitationApiFailure | null, fallback
   return payload?.error?.message || fallback;
 }
 
+function buildStatsDraft(participant: MatchParticipantSummary) {
+  return {
+    goals: participant.goals.toString(),
+    assists: participant.assists.toString(),
+    is_mvp: participant.is_mvp
+  };
+}
+
 export function MatchParticipantPanel({
   matchId,
   currentUserId,
@@ -40,6 +48,12 @@ export function MatchParticipantPanel({
   const [participants, setParticipants] = useState(initialParticipants);
   const [pendingParticipantId, setPendingParticipantId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [statsDrafts, setStatsDrafts] = useState<Record<string, { goals: string; assists: string; is_mvp: boolean }>>(
+    () =>
+      Object.fromEntries(
+        initialParticipants.map((participant) => [participant.id, buildStatsDraft(participant)])
+      )
+  );
 
   const groupedParticipants = useMemo(
     () => [
@@ -88,6 +102,54 @@ export function MatchParticipantPanel({
       setParticipants((currentParticipants) =>
         currentParticipants.map((participant) => (participant.id === participantId ? payload.data : participant))
       );
+      router.refresh();
+    } catch {
+      setErrorMessage("Không thể kết nối tới hệ thống. Vui lòng thử lại.");
+    } finally {
+      setPendingParticipantId(null);
+    }
+  }
+
+  async function updateStats(participantId: string) {
+    const draft = statsDrafts[participantId];
+
+    if (!draft) {
+      return;
+    }
+
+    setPendingParticipantId(participantId);
+    setErrorMessage(null);
+
+    try {
+      const response = await fetch(`/api/v1/matches/${matchId}/participants/${participantId}/stats`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          goals: Number(draft.goals),
+          assists: Number(draft.assists),
+          is_mvp: draft.is_mvp
+        })
+      });
+
+      const payload = (await response.json().catch(() => null)) as
+        | MatchInvitationApiSuccess<MatchParticipantSummary>
+        | MatchInvitationApiFailure
+        | null;
+
+      if (!response.ok || !payload || !("data" in payload)) {
+        setErrorMessage(readApiErrorMessage(payload as MatchInvitationApiFailure | null, "Không thể cập nhật stats cầu thủ."));
+        return;
+      }
+
+      setParticipants((currentParticipants) =>
+        currentParticipants.map((participant) => (participant.id === participantId ? payload.data : participant))
+      );
+      setStatsDrafts((currentDrafts) => ({
+        ...currentDrafts,
+        [participantId]: buildStatsDraft(payload.data)
+      }));
       router.refresh();
     } catch {
       setErrorMessage("Không thể kết nối tới hệ thống. Vui lòng thử lại.");
@@ -158,6 +220,17 @@ export function MatchParticipantPanel({
                           <p className="mt-1 text-xs uppercase tracking-[0.2em] text-[var(--brand)]">
                             {participant.role} • {attendanceLabels[participant.attendance_status]}
                           </p>
+                          <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold">
+                            <span className="rounded-full bg-[var(--card-muted)] px-3 py-1 text-[var(--brand-strong)]">
+                              G {participant.goals}
+                            </span>
+                            <span className="rounded-full bg-[var(--card-muted)] px-3 py-1 text-[var(--brand-strong)]">
+                              A {participant.assists}
+                            </span>
+                            {participant.is_mvp ? (
+                              <span className="rounded-full bg-[var(--brand)] px-3 py-1 text-white">MVP</span>
+                            ) : null}
+                          </div>
                         </div>
                         {isCurrentUser ? (
                           <span className="rounded-full bg-[var(--card-muted)] px-3 py-1 text-[11px] font-semibold text-[var(--brand)]">
@@ -187,6 +260,84 @@ export function MatchParticipantPanel({
                               </button>
                             );
                           })}
+                        </div>
+                      ) : null}
+
+                      {canCaptainManage ? (
+                        <div className="mt-4 rounded-2xl bg-[var(--card-muted)] p-3">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--brand)]">
+                            Match Stats
+                          </p>
+                          <div className="mt-3 grid gap-3 sm:grid-cols-[0.8fr_0.8fr_1fr_auto] sm:items-end">
+                            <label className="grid gap-2 text-xs font-medium text-[var(--brand-strong)]">
+                              Goals
+                              <input
+                                type="number"
+                                min={0}
+                                inputMode="numeric"
+                                value={statsDrafts[participant.id]?.goals ?? "0"}
+                                onChange={(event) =>
+                                  setStatsDrafts((currentDrafts) => ({
+                                    ...currentDrafts,
+                                    [participant.id]: {
+                                      ...(currentDrafts[participant.id] ?? buildStatsDraft(participant)),
+                                      goals: event.target.value
+                                    }
+                                  }))
+                                }
+                                disabled={isMutating}
+                                className="rounded-2xl border border-black/10 bg-white px-3 py-2 text-sm outline-none transition focus:border-[var(--brand)] disabled:opacity-70"
+                              />
+                            </label>
+
+                            <label className="grid gap-2 text-xs font-medium text-[var(--brand-strong)]">
+                              Assists
+                              <input
+                                type="number"
+                                min={0}
+                                inputMode="numeric"
+                                value={statsDrafts[participant.id]?.assists ?? "0"}
+                                onChange={(event) =>
+                                  setStatsDrafts((currentDrafts) => ({
+                                    ...currentDrafts,
+                                    [participant.id]: {
+                                      ...(currentDrafts[participant.id] ?? buildStatsDraft(participant)),
+                                      assists: event.target.value
+                                    }
+                                  }))
+                                }
+                                disabled={isMutating}
+                                className="rounded-2xl border border-black/10 bg-white px-3 py-2 text-sm outline-none transition focus:border-[var(--brand)] disabled:opacity-70"
+                              />
+                            </label>
+
+                            <label className="flex items-center gap-2 rounded-2xl bg-white px-3 py-3 text-xs font-semibold text-[var(--brand-strong)]">
+                              <input
+                                type="checkbox"
+                                checked={statsDrafts[participant.id]?.is_mvp ?? false}
+                                onChange={(event) =>
+                                  setStatsDrafts((currentDrafts) => ({
+                                    ...currentDrafts,
+                                    [participant.id]: {
+                                      ...(currentDrafts[participant.id] ?? buildStatsDraft(participant)),
+                                      is_mvp: event.target.checked
+                                    }
+                                  }))
+                                }
+                                disabled={isMutating}
+                              />
+                              MVP tạm
+                            </label>
+
+                            <button
+                              type="button"
+                              onClick={() => void updateStats(participant.id)}
+                              disabled={isMutating}
+                              className="rounded-2xl bg-[var(--brand-strong)] px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-70"
+                            >
+                              {isMutating ? "Đang lưu..." : "Lưu stats"}
+                            </button>
+                          </div>
                         </div>
                       ) : null}
                     </article>

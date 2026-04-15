@@ -15,13 +15,28 @@ import { ApiError } from "@/lib/http";
 import {
   CreateMatchPostInput,
   MatchPostListFilters,
+  UpdateMatchInput,
+  UpdateMatchParticipantStatsInput,
   parseCreateMatchPostInput,
+  parseUpdateMatchInput,
+  parseUpdateMatchParticipantStatsInput,
   parseDateOnly,
   parseTimeOnly
 } from "./validation";
 
-export { parseCreateMatchPostInput, parseDateOnly, parseTimeOnly };
-export type { CreateMatchPostInput, MatchPostListFilters };
+export {
+  parseCreateMatchPostInput,
+  parseDateOnly,
+  parseTimeOnly,
+  parseUpdateMatchInput,
+  parseUpdateMatchParticipantStatsInput
+};
+export type {
+  CreateMatchPostInput,
+  MatchPostListFilters,
+  UpdateMatchInput,
+  UpdateMatchParticipantStatsInput
+};
 
 type MatchPostWithTeam = Prisma.MatchPostGetPayload<{
   include: {
@@ -217,6 +232,11 @@ function buildMatchSummary(match: MatchWithTeams) {
     source_match_post_id: match.source_match_post_id,
     status: match.status,
     match_type: match.match_type,
+    home_score: match.home_score,
+    away_score: match.away_score,
+    result_note: match.result_note,
+    completed_at: match.completed_at?.toISOString() ?? null,
+    cancelled_at: match.cancelled_at?.toISOString() ?? null,
     date: match.date.toISOString().slice(0, 10),
     start_time: match.start_time.toISOString().slice(11, 16),
     end_time: match.end_time?.toISOString().slice(11, 16) ?? null,
@@ -258,6 +278,9 @@ function buildMatchParticipantSummary(participant: MatchParticipantWithRelations
     source_type: participant.source_type,
     role: participant.role,
     attendance_status: participant.attendance_status,
+    goals: participant.goals,
+    assists: participant.assists,
+    is_mvp: participant.is_mvp,
     position_code: participant.position_code,
     created_at: participant.created_at.toISOString(),
     updated_at: participant.updated_at.toISOString(),
@@ -458,6 +481,38 @@ async function requireMatchAccess(matchId: string, currentUserId: string) {
   };
 }
 
+async function requireMatchCaptainAccess(matchId: string, currentUserId: string) {
+  const access = await requireMatchAccess(matchId, currentUserId);
+  const teamIds = [access.match.home_team_id, access.match.away_team_id].filter((teamId): teamId is string => Boolean(teamId));
+
+  const captainMembership =
+    teamIds.length === 0
+      ? null
+      : await db.teamMember.findFirst({
+          where: {
+            user_id: currentUserId,
+            status: TeamMemberStatus.active,
+            role: TeamRole.captain,
+            team_id: {
+              in: teamIds
+            }
+          },
+          select: {
+            team_id: true,
+            role: true
+          }
+        });
+
+  if (!captainMembership) {
+    throw new ApiError(403, "FORBIDDEN", "Captain permission is required to manage this match.");
+  }
+
+  return {
+    ...access,
+    captainMembership
+  };
+}
+
 async function syncMatchPostStatus(tx: Prisma.TransactionClient, matchPostId: string) {
   const [matchPost, invitations] = await Promise.all([
     tx.matchPost.findUnique({
@@ -612,6 +667,116 @@ export async function getMatchDetail(matchId: string, currentUserId: string) {
   return buildMatchSummary(match);
 }
 
+export async function updateMatch(matchId: string, currentUserId: string, input: UpdateMatchInput) {
+  const { match } = await requireMatchCaptainAccess(matchId, currentUserId);
+
+  const nextStatus = input.status ?? match.status;
+  const nextDate = input.date ? parseDateOnly(input.date) : match.date;
+  const nextStartTime = input.start_time ? parseTimeOnly(input.start_time, "Start time") : match.start_time;
+  const nextEndTime =
+    input.end_time !== undefined ? (input.end_time ? parseTimeOnly(input.end_time, "End time") : null) : match.end_time;
+
+  if (nextEndTime && nextEndTime <= nextStartTime) {
+    throw new ApiError(400, "VALIDATION_ERROR", "End time must be later than start time.");
+  }
+
+  const nextHomeScore = input.home_score !== undefined ? input.home_score : match.home_score;
+  const nextAwayScore = input.away_score !== undefined ? input.away_score : match.away_score;
+  const nextResultNote = input.result_note !== undefined ? input.result_note : match.result_note;
+  const isScorePayloadPresent =
+    input.home_score !== undefined || input.away_score !== undefined || input.result_note !== undefined;
+
+  if (isScorePayloadPresent && nextStatus !== MatchStatus.completed) {
+    throw new ApiError(400, "VALIDATION_ERROR", "Scores and result notes can only be set when the match is completed.");
+  }
+
+  if (nextStatus === MatchStatus.completed && (nextHomeScore === null || nextAwayScore === null)) {
+    throw new ApiError(400, "VALIDATION_ERROR", "Both home_score and away_score are required to complete the match.");
+  }
+
+  const data: Prisma.MatchUpdateInput = {};
+
+  if (input.status !== undefined) {
+    data.status = input.status;
+  }
+
+  if (input.date !== undefined) {
+    data.date = nextDate;
+  }
+
+  if (input.start_time !== undefined) {
+    data.start_time = nextStartTime;
+  }
+
+  if (input.end_time !== undefined) {
+    data.end_time = nextEndTime;
+  }
+
+  if (input.timezone !== undefined) {
+    data.timezone = input.timezone;
+  }
+
+  if (input.city_code !== undefined) {
+    data.city_code = input.city_code;
+  }
+
+  if (input.district_code !== undefined) {
+    data.district_code = input.district_code;
+  }
+
+  if (input.venue_name !== undefined) {
+    data.venue_name = input.venue_name;
+  }
+
+  if (input.venue_address !== undefined) {
+    data.venue_address = input.venue_address;
+  }
+
+  if (input.field_type !== undefined) {
+    data.field_type = input.field_type;
+  }
+
+  if (nextStatus === MatchStatus.completed) {
+    data.home_score = nextHomeScore;
+    data.away_score = nextAwayScore;
+    data.result_note = nextResultNote;
+    data.completed_at = match.completed_at ?? new Date();
+    data.cancelled_at = null;
+  } else if (input.status !== undefined) {
+    if (input.status === MatchStatus.cancelled) {
+      data.cancelled_at = match.cancelled_at ?? new Date();
+    } else if (match.cancelled_at) {
+      data.cancelled_at = null;
+    }
+
+    if (match.status === MatchStatus.completed || input.status === MatchStatus.cancelled) {
+      data.home_score = null;
+      data.away_score = null;
+      data.result_note = null;
+      data.completed_at = null;
+    }
+  }
+
+  const updatedMatch = await db.match.update({
+    where: {
+      id: matchId
+    },
+    data,
+    include: {
+      home_team: true,
+      away_team: true,
+      match_participants: {
+        select: {
+          id: true,
+          attendance_status: true
+        }
+      }
+    }
+  });
+
+  return buildMatchSummary(updatedMatch);
+}
+
 export async function listMatchParticipants(matchId: string, currentUserId: string) {
   await requireMatchAccess(matchId, currentUserId);
 
@@ -698,6 +863,76 @@ export async function updateMatchParticipantAttendance(
     },
     data: {
       attendance_status: attendanceStatus
+    },
+    include: {
+      user: {
+        select: {
+          id: true,
+          display_name: true,
+          avatar_url: true
+        }
+      },
+      team: {
+        select: {
+          id: true,
+          name: true,
+          short_code: true,
+          logo_url: true
+        }
+      }
+    }
+  });
+
+  return buildMatchParticipantSummary(updatedParticipant);
+}
+
+export async function updateMatchParticipantStats(
+  matchId: string,
+  participantId: string,
+  input: UpdateMatchParticipantStatsInput,
+  currentUserId: string
+) {
+  const { match, captainMembership } = await requireMatchCaptainAccess(matchId, currentUserId);
+
+  const participant = await db.matchParticipant.findUnique({
+    where: {
+      id: participantId
+    },
+    include: {
+      user: {
+        select: {
+          id: true,
+          display_name: true,
+          avatar_url: true
+        }
+      },
+      team: {
+        select: {
+          id: true,
+          name: true,
+          short_code: true,
+          logo_url: true
+        }
+      }
+    }
+  });
+
+  if (!participant || participant.match_id !== match.id) {
+    throw new ApiError(404, "NOT_FOUND", "Match participant not found.");
+  }
+
+  if (!participant.team_id || participant.team_id !== captainMembership.team_id) {
+    throw new ApiError(403, "FORBIDDEN", "You can only update stats for participants on your team.");
+  }
+
+  const updatedParticipant = await db.matchParticipant.update({
+    where: {
+      id: participantId
+    },
+    data: {
+      ...(input.goals !== undefined ? { goals: input.goals } : {}),
+      ...(input.assists !== undefined ? { assists: input.assists } : {}),
+      ...(input.is_mvp !== undefined ? { is_mvp: input.is_mvp } : {})
     },
     include: {
       user: {

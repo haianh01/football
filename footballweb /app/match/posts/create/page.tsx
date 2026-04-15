@@ -2,10 +2,10 @@ import Link from "next/link";
 
 import { createMatchPostAction } from "@/features/matchmaking";
 import { listTeamsForUser } from "@/features/team-management";
-import { requireCurrentUser } from "@/lib/auth/current-user";
+import { requirePageUser } from "@/lib/auth/current-user";
 
 export default async function CreateMatchPostPage() {
-  const currentUser = await requireCurrentUser();
+  const currentUser = await requirePageUser("/login?redirectTo=/match/posts/create");
   const teams = await listTeamsForUser(currentUser.id);
 
   return (

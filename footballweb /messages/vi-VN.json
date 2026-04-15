@@ -2,18 +2,18 @@
   "Home": {
     "eyebrow": "Foundation Phase",
     "title": "V-Pitch",
-    "loginCta": "Auth Stub",
+    "loginCta": "Đăng nhập",
     "hero": {
       "label": "Scaffold kỹ thuật",
       "title": "Khởi động codebase từ nền móng đúng thay vì lao ngay vào landing page.",
-      "body": "Repo hiện đã có khung Next.js App Router, TypeScript strict mode, Tailwind foundation, next-intl, Auth.js stub, Prisma skeleton và cấu trúc domain để đi tiếp sang Auth -> Team -> Dashboard.",
+      "body": "Repo hiện đã có khung Next.js App Router, TypeScript strict mode, Tailwind foundation, next-intl, auth email-based session, Prisma skeleton và cấu trúc domain để đi tiếp sang Team -> Match -> Dashboard.",
       "primaryCta": "Tạo đội đầu tiên",
       "secondaryCta": "Xem foundation"
     },
     "foundation": {
       "label": "Technical Base",
       "title": "Bước 1 đã được scaffold",
-      "badge": "Ready for Auth"
+      "badge": "Auth Enabled"
     },
     "stack": {
       "label": "Stack",
@@ -30,11 +30,11 @@
     }
   },
   "Login": {
-    "label": "Auth Placeholder",
-    "title": "Màn đăng nhập sẽ được wire ở bước tiếp theo",
-    "body": "Bước này auth thật chưa hoàn tất. Trong môi trường development, API và team flow đang dùng dev fallback user để bạn có thể tiếp tục code slice Team ngay.",
-    "placeholderTitle": "Sẵn sàng cho bước 2",
-    "placeholderBody": "Từ đây có thể tiếp tục sang API Auth, tạo user, tạo team và dashboard đội cơ bản.",
+    "label": "Auth",
+    "title": "Đăng nhập để tiếp tục vào luồng vận hành đội bóng",
+    "body": "Bản hiện tại dùng session đăng nhập theo email và có thể bật thêm Google OAuth. Đây là bước chuyển từ auth placeholder sang auth dùng được trong app.",
+    "placeholderTitle": "Đăng nhập tối thiểu",
+    "placeholderBody": "Nhập email để vào app, hoặc dùng Google nếu môi trường đã cấu hình provider. Khi user chưa tồn tại, hệ thống sẽ tự tạo hồ sơ cơ bản, `user_identity`, `user_preference` và session.",
     "backCta": "Về trang chính"
   }
 }

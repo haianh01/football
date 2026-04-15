@@ -303,4 +303,259 @@ describe("matchmaking service integration", () => {
     const absent = await updateMatchParticipantAttendance(persistedMatch.id, teammateParticipant.id, "absent", captainId);
     expect(absent.attendance_status).toBe("absent");
   });
+
+  it("captain can update same-team participant goals, assists and mvp flag", async () => {
+    const teammateId = "99999999-9999-9999-9999-999999999999";
+
+    await integrationDb.user.create({
+      data: {
+        id: teammateId,
+        email: "teammate@example.com",
+        display_name: "Teammate",
+        country_code: "VN",
+        timezone: "Asia/Ho_Chi_Minh",
+        preferred_locale: "vi-VN"
+      }
+    });
+
+    await integrationDb.teamMember.create({
+      data: {
+        team_id: teamId,
+        user_id: teammateId,
+        role: "member",
+        status: "active",
+        joined_at: new Date("2026-04-10T11:00:00.000Z")
+      }
+    });
+
+    await integrationDb.user.create({
+      data: {
+        id: challengerCaptainId,
+        email: "challenger@example.com",
+        display_name: "Challenger Captain",
+        country_code: "VN",
+        timezone: "Asia/Ho_Chi_Minh",
+        preferred_locale: "vi-VN"
+      }
+    });
+
+    await integrationDb.team.create({
+      data: {
+        id: challengerTeamId,
+        name: "FC Challenger",
+        slug: "fc-challenger",
+        short_code: "VP-TEAM002",
+        skill_level_code: "L3_INTERMEDIATE",
+        created_by: challengerCaptainId
+      }
+    });
+
+    await integrationDb.teamMember.create({
+      data: {
+        team_id: challengerTeamId,
+        user_id: challengerCaptainId,
+        role: "captain",
+        status: "active",
+        joined_at: new Date("2026-04-10T12:00:00.000Z")
+      }
+    });
+
+    const { acceptMatchInvitation, createMatchInvitation, createMatchPost, updateMatchParticipantStats } = await import("./service");
+
+    const post = await createMatchPost(
+      {
+        team_id: teamId,
+        title: "Kèo nhập stats cầu thủ",
+        match_type: "friendly",
+        urgency: "normal",
+        date: "2026-04-12",
+        start_time: "19:30",
+        end_time: "21:00",
+        city_code: "HCM",
+        district_code: "Q7",
+        venue_name: "Sân Đại Nam",
+        field_type: "seven",
+        team_skill_min: "L2_RECREATIONAL",
+        team_skill_max: "L4_ADVANCED",
+        pitch_fee_rule: "share"
+      },
+      captainId
+    );
+
+    const invitation = await createMatchInvitation(
+      {
+        match_post_id: post.id,
+        inviter_team_id: challengerTeamId
+      },
+      challengerCaptainId
+    );
+
+    await acceptMatchInvitation(invitation.id, captainId);
+
+    const persistedMatch = await integrationDb.match.findUniqueOrThrow({
+      where: {
+        source_match_post_id: post.id
+      }
+    });
+    const teammateParticipant = await integrationDb.matchParticipant.findFirstOrThrow({
+      where: {
+        match_id: persistedMatch.id,
+        user_id: teammateId
+      }
+    });
+
+    const updatedParticipant = await updateMatchParticipantStats(
+      persistedMatch.id,
+      teammateParticipant.id,
+      {
+        goals: 2,
+        assists: 1,
+        is_mvp: true
+      },
+      captainId
+    );
+
+    expect(updatedParticipant).toEqual(
+      expect.objectContaining({
+        id: teammateParticipant.id,
+        goals: 2,
+        assists: 1,
+        is_mvp: true
+      })
+    );
+
+    const persistedParticipant = await integrationDb.matchParticipant.findUniqueOrThrow({
+      where: {
+        id: teammateParticipant.id
+      }
+    });
+
+    expect(persistedParticipant.goals).toBe(2);
+    expect(persistedParticipant.assists).toBe(1);
+    expect(persistedParticipant.is_mvp).toBe(true);
+  });
+
+  it("captain can update match fixture details and complete the match with a score", async () => {
+    await integrationDb.user.create({
+      data: {
+        id: challengerCaptainId,
+        email: "challenger@example.com",
+        display_name: "Challenger Captain",
+        country_code: "VN",
+        timezone: "Asia/Ho_Chi_Minh",
+        preferred_locale: "vi-VN"
+      }
+    });
+
+    await integrationDb.team.create({
+      data: {
+        id: challengerTeamId,
+        name: "FC Challenger",
+        slug: "fc-challenger",
+        short_code: "VP-TEAM002",
+        skill_level_code: "L3_INTERMEDIATE",
+        created_by: challengerCaptainId
+      }
+    });
+
+    await integrationDb.teamMember.create({
+      data: {
+        team_id: challengerTeamId,
+        user_id: challengerCaptainId,
+        role: "captain",
+        status: "active",
+        joined_at: new Date("2026-04-10T12:00:00.000Z")
+      }
+    });
+
+    const { acceptMatchInvitation, createMatchInvitation, createMatchPost, updateMatch } = await import("./service");
+
+    const post = await createMatchPost(
+      {
+        team_id: teamId,
+        title: "Kèo update match lifecycle",
+        match_type: "friendly",
+        urgency: "normal",
+        date: "2026-04-12",
+        start_time: "19:30",
+        end_time: "21:00",
+        city_code: "HCM",
+        district_code: "Q7",
+        venue_name: "Sân Đại Nam",
+        field_type: "seven",
+        team_skill_min: "L2_RECREATIONAL",
+        team_skill_max: "L4_ADVANCED",
+        pitch_fee_rule: "share"
+      },
+      captainId
+    );
+
+    const invitation = await createMatchInvitation(
+      {
+        match_post_id: post.id,
+        inviter_team_id: challengerTeamId
+      },
+      challengerCaptainId
+    );
+
+    await acceptMatchInvitation(invitation.id, captainId);
+
+    const persistedMatch = await integrationDb.match.findUniqueOrThrow({
+      where: {
+        source_match_post_id: post.id
+      }
+    });
+
+    const confirmed = await updateMatch(persistedMatch.id, captainId, {
+      status: "confirmed",
+      date: "2026-04-13",
+      start_time: "20:00",
+      end_time: "21:30",
+      venue_name: "Sân Mỹ Đình 2",
+      district_code: "MY_DINH"
+    });
+
+    expect(confirmed).toEqual(
+      expect.objectContaining({
+        id: persistedMatch.id,
+        status: "confirmed",
+        date: "2026-04-13",
+        start_time: "20:00",
+        end_time: "21:30",
+        venue_name: "Sân Mỹ Đình 2",
+        district_code: "MY_DINH",
+        home_score: null,
+        away_score: null
+      })
+    );
+
+    const completed = await updateMatch(persistedMatch.id, captainId, {
+      status: "completed",
+      home_score: 3,
+      away_score: 2,
+      result_note: "Đội nhà thắng sát nút."
+    });
+
+    expect(completed).toEqual(
+      expect.objectContaining({
+        id: persistedMatch.id,
+        status: "completed",
+        home_score: 3,
+        away_score: 2,
+        result_note: "Đội nhà thắng sát nút."
+      })
+    );
+    expect(completed.completed_at).not.toBeNull();
+
+    const matchAfterCompletion = await integrationDb.match.findUniqueOrThrow({
+      where: {
+        id: persistedMatch.id
+      }
+    });
+
+    expect(matchAfterCompletion.status).toBe("completed");
+    expect(matchAfterCompletion.home_score).toBe(3);
+    expect(matchAfterCompletion.away_score).toBe(2);
+    expect(matchAfterCompletion.completed_at).not.toBeNull();
+  });
 });

@@ -1,4 +1,5 @@
 import { TeamJoinForm } from "@/features/team-management/team-join-form";
+import { requirePageUser } from "@/lib/auth/current-user";
 
 export default async function TeamJoinPage({
   searchParams
@@ -7,6 +8,7 @@ export default async function TeamJoinPage({
 }) {
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const code = typeof resolvedSearchParams?.code === "string" ? resolvedSearchParams.code : "";
+  await requirePageUser(`/login?redirectTo=${encodeURIComponent(code ? `/team/join?code=${code}` : "/team/join")}`);
 
   return (
     <main className="mx-auto flex min-h-screen max-w-3xl flex-col px-4 py-10 sm:px-6">

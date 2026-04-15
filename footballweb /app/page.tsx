@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 
+import { getCurrentUser } from "@/lib/auth/current-user";
+
 const pillars = [
   {
     title: "Team Control",
@@ -24,6 +26,7 @@ const nextSteps = [
 
 export default async function HomePage() {
   const t = await getTranslations("Home");
+  const currentUser = await getCurrentUser();
 
   return (
     <main className="mx-auto flex min-h-screen max-w-6xl flex-col px-4 pb-16 pt-6 sm:px-6 lg:px-8">
@@ -51,10 +54,10 @@ export default async function HomePage() {
               Create Team
             </Link>
             <Link
-              href="/login"
+              href={currentUser ? "/team/create" : "/login"}
               className="rounded-2xl border border-black/10 px-4 py-2 text-sm font-semibold text-[var(--brand-strong)] transition hover:bg-white/70"
             >
-              {t("loginCta")}
+              {currentUser ? currentUser.display_name : t("loginCta")}
             </Link>
           </div>
         </div>

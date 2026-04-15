@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
 
+import { SessionBar } from "@/components/auth/session-bar";
+
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -28,7 +30,10 @@ export default async function RootLayout({
       }
     >
       <body className="font-[var(--font-body)] antialiased">
-        <NextIntlClientProvider messages={messages}>{children}</NextIntlClientProvider>
+        <NextIntlClientProvider messages={messages}>
+          <SessionBar />
+          {children}
+        </NextIntlClientProvider>
       </body>
     </html>
   );
