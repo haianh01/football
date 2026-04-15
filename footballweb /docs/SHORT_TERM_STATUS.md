@@ -26,13 +26,13 @@ Ngày cập nhật: 2026-04-15
 - Dựng `post-match recap` tối thiểu ngay trên trang match từ scoreline + scorers + assists + MVP highlights.
 - Hiển thị scoreline/result note trên match detail và trên card `scheduled_match` của match post khi trận đã complete.
 - Bổ sung validation test, route test và integration test cho nhánh match lifecycle tối thiểu.
-- Hoàn thiện auth session tối thiểu bằng `NextAuth` theo email, kèm Google OAuth tùy chọn khi có biến môi trường.
-- Thêm login page thật, login form, logout action và session bar toàn app.
+- Hoàn thiện auth session tối thiểu bằng `NextAuth` theo email OTP, kèm Google OAuth tùy chọn khi có biến môi trường.
+- Thêm login page thật, login form, logout action và session bar toàn app. Form login đã hỗ trợ 2 bước: điền email -> nhận/gửi mã OTP.
 - Tự provision `user`, `user_identity`, `user_preference` khi đăng nhập lần đầu bằng email.
 - Tự provision `user`, `user_identity`, `user_preference` khi đăng nhập lần đầu bằng Google; login page hiện tự bật nút Google khi có `AUTH_GOOGLE_ID` và `AUTH_GOOGLE_SECRET`.
 - Đổi `getCurrentUser` sang ưu tiên session thật; dev bypass chỉ còn chạy khi có `x-demo-user-*` hoặc `DEV_AUTH_BYPASS_EMAIL`.
 - Cho các page chính như `team/create`, `team/join`, `team/[teamId]`, `matches/[matchId]`, `match/posts/create` redirect về `/login` khi chưa có session.
-- Bổ sung unit test cho auth actions.
+- Bổ sung unit test cho auth actions bao gồm cả sendOtpAction và loginAction.
 
 ## Đã có sẵn từ trước
 
@@ -52,7 +52,7 @@ Ngày cập nhật: 2026-04-15
 - Team admin nâng cao vẫn chưa có.
   Đã có edit team cơ bản và member management cơ bản, nhưng chưa có flow phân quyền chi tiết hơn theo `vice_captain`, chưa có lịch sử thay đổi role, chưa có archive team.
 - Auth production-grade vẫn chưa full.
-  Đã có session/login dùng được theo email và Google, nhưng chưa có password, OTP/magic link, verify email, reset password và session management nâng cao.
+  Đã có Email OTP và Google OAuth, nhưng chưa có verify mail qua link vòng lặp, password management nâng cao, và session/device management.
 - Match lifecycle vẫn chưa full.
   Đã có update fixture, đổi status, nhập tỷ số tối thiểu, goals, assists, MVP tạm và recap tối thiểu; nhưng chưa có event log chi tiết từng bàn, own goal, review sau trận, lịch sử chỉnh sửa và rule chi tiết hơn cho từng transition.
 - Logo upload vẫn là giải pháp tạm.

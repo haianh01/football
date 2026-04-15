@@ -411,3 +411,14 @@ enum PitchFeeRule {
   away_team_pays
   sponsor_supported
 }
+
+model OtpCode {
+  id         String   @id @default(uuid()) @db.Uuid
+  email      String   @db.VarChar(255)
+  code       String   @db.VarChar(10)
+  expires_at DateTime @db.Timestamptz(6)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([email, code], map: "idx_otp_codes_email_code")
+  @@map("otp_codes")
+}

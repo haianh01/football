@@ -37,25 +37,29 @@ export default async function LoginPage({
           <p className="mt-2 text-sm leading-6 text-[var(--ink-soft)]">{t("placeholderBody")}</p>
         </div>
 
-        {isGoogleAuthEnabled ? (
-          <form action={googleLoginAction} className="mt-6">
-            <input type="hidden" name="redirect_to" value={redirectTo || "/"} />
-            <button
-              type="submit"
-              className="inline-flex w-full items-center justify-center rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm font-semibold text-[var(--brand-strong)] transition hover:bg-white/70"
-            >
-              Tiếp tục với Google
-            </button>
-          </form>
-        ) : null}
+        <form action={googleLoginAction} className="mt-8">
+          <input type="hidden" name="redirect_to" value={redirectTo || "/"} />
+          <button
+            type="submit"
+            disabled={!isGoogleAuthEnabled}
+            title={!isGoogleAuthEnabled ? "Bạn cần cấu hình AUTH_GOOGLE_ID và AUTH_GOOGLE_SECRET trong file .env" : ""}
+            className="inline-flex w-full items-center justify-center rounded-2xl border border-black/10 bg-[var(--brand)] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[var(--brand)]/90 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Đăng nhập bằng tài khoản Google
+          </button>
+        </form>
 
-        {isGoogleAuthEnabled ? (
-          <div className="mt-6 flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.24em] text-[var(--ink-soft)]">
-            <span className="h-px flex-1 bg-black/10" />
-            <span>Hoặc dùng email</span>
-            <span className="h-px flex-1 bg-black/10" />
+        {!isGoogleAuthEnabled ? (
+          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs font-medium text-amber-800">
+            <strong>Cần cấu hình:</strong> Vui lòng đặt <code>AUTH_GOOGLE_ID</code> và <code>AUTH_GOOGLE_SECRET</code> trong file <code>.env</code> để Đăng nhập Google hoạt động chính xác.
           </div>
         ) : null}
+
+        <div className="mt-6 flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.24em] text-[var(--ink-soft)]">
+          <span className="h-px flex-1 bg-black/10" />
+          <span>Hoặc đăng nhập nhanh (Dev)</span>
+          <span className="h-px flex-1 bg-black/10" />
+        </div>
 
         <LoginForm redirectTo={redirectTo || "/"} />
 

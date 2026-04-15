@@ -11,14 +11,8 @@ const providers: NextAuthConfig["providers"] = [
   Credentials({
     name: "Email",
     credentials: {
-      email: {
-        label: "Email",
-        type: "email"
-      },
-      display_name: {
-        label: "Display name",
-        type: "text"
-      }
+      email: { label: "Email", type: "email" },
+      display_name: { label: "Display name", type: "text" }
     },
     async authorize(credentials) {
       const email = typeof credentials?.email === "string" ? credentials.email.trim().toLowerCase() : "";
