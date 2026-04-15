@@ -53,7 +53,11 @@ export default async function MatchPostDetailPage({
         name: team.name,
         short_code: team.short_code
       }));
-    const isTargetCaptain = captainTeams.some((team) => team.id === matchPost.team.id);
+    const targetTeamMembership = userTeams.find((team) => team.id === matchPost.team.id) ?? null;
+    const isTargetCaptain = targetTeamMembership?.role_of_current_user === "captain";
+    const isTargetMember = Boolean(targetTeamMembership);
+    const canManageFinance = Boolean(targetTeamMembership);
+    const targetTeamRole = targetTeamMembership?.role_of_current_user ?? null;
     const invitations = currentUser ? await listMatchPostInvitations(matchPostId, currentUser.id) : [];
     const scheduledMatchHasScoreline =
       matchPost.scheduled_match?.home_score !== null && matchPost.scheduled_match?.away_score !== null;
@@ -236,6 +240,9 @@ export default async function MatchPostDetailPage({
           initialInvitations={invitations}
           eligibleInviterTeams={eligibleInviterTeams}
           isTargetCaptain={isTargetCaptain}
+          isTargetMember={isTargetMember}
+          canManageFinance={canManageFinance}
+          targetTeamRole={targetTeamRole}
         />
       </main>
     );

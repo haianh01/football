@@ -1,3 +1,5 @@
+import type { TeamFeeSummary } from "@/features/team-finance";
+
 export type MatchInvitationSummary = {
   id: string;
   status: "pending" | "accepted" | "rejected" | "cancelled";
@@ -24,6 +26,14 @@ export type MatchInvitationSummary = {
     short_code: string;
     logo_url: string | null;
   };
+  vote_count: number;
+  has_voted_by_current_user: boolean;
+  voters: Array<{
+    user_id: string;
+    display_name: string;
+    avatar_url: string | null;
+  }>;
+  fee: TeamFeeSummary | null;
 };
 
 export type MatchInvitationDashboardItem = {

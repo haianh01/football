@@ -1,9 +1,10 @@
-import { AttendanceStatus, InviteStatus, InviteType, MatchInvitationStatus, MatchStatus, TeamMemberStatus, TeamRole } from "@prisma/client";
+import { AttendanceStatus, InviteStatus, InviteType, MatchInvitationStatus, MatchStatus, TeamFeeStatus, TeamMemberStatus, TeamRole } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
 
 import { db } from "@/lib/db";
 import { ApiError } from "@/lib/http";
 import { slugify } from "@/lib/slug";
+import { buildTeamFeeSummary, TEAM_FEE_INCLUDE } from "@/features/team-finance";
 import {
   CreateTeamInput,
   UpdateTeamInput,
@@ -223,7 +224,7 @@ export async function getTeamDashboard(teamId: string, currentUserId: string) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const [teamDetail, members, pendingMatchInvitations, upcomingMatches] = await Promise.all([
+  const [teamDetail, members, pendingMatchInvitations, upcomingMatches, teamFees] = await Promise.all([
     getTeamDetail(teamId, currentUserId),
     db.teamMember.findMany({
       where: {
@@ -311,6 +312,17 @@ export async function getTeamDashboard(teamId: string, currentUserId: string) {
       },
       orderBy: [{ date: "asc" }, { start_time: "asc" }],
       take: 5
+    }),
+    db.teamFee.findMany({
+      where: {
+        team_id: teamId,
+        status: {
+          not: TeamFeeStatus.cancelled
+        }
+      },
+      include: TEAM_FEE_INCLUDE,
+      orderBy: [{ due_at: "asc" }, { created_at: "desc" }],
+      take: 5
     })
   ]);
 
@@ -353,6 +365,10 @@ export async function getTeamDashboard(teamId: string, currentUserId: string) {
     };
   });
   const upcomingMatchShortage = upcomingMatchItems.reduce((sum, match) => sum + match.current_team_shortage, 0);
+  const canManageFinance = membership.role === TeamRole.captain || membership.role === TeamRole.treasurer;
+  const feeSummaries = teamFees.map((fee) => buildTeamFeeSummary(fee));
+  const overdueFeeAssignees = feeSummaries.reduce((sum, fee) => sum + fee.overdue_count, 0);
+  const openFeeSummaries = canManageFinance ? feeSummaries : [];
 
   return {
     team_summary: {
@@ -373,7 +389,7 @@ export async function getTeamDashboard(teamId: string, currentUserId: string) {
     action_center: {
       pending_confirmations: pendingMatchInvitations.length,
       open_polls: 0,
-      overdue_fee_assignees: 0,
+      overdue_fee_assignees: overdueFeeAssignees,
       upcoming_match_shortage: upcomingMatchShortage
     },
     upcoming_matches: upcomingMatchItems,
@@ -392,7 +408,7 @@ export async function getTeamDashboard(teamId: string, currentUserId: string) {
       }
     })),
     open_polls: [],
-    open_fees: [],
+    open_fees: openFeeSummaries,
     member_summary: {
       active_members: activeMembers.length,
       average_attendance_rate: Number(averageAttendanceRate.toFixed(1))

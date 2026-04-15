@@ -23,9 +23,12 @@ export async function SessionBar() {
 
           {currentUser ? (
             <>
-              <span className="rounded-full bg-[var(--card-muted)] px-3 py-2 text-sm font-semibold text-[var(--brand-strong)]">
+              <Link
+                href="/"
+                className="rounded-full bg-[var(--card-muted)] px-3 py-2 text-sm font-semibold text-[var(--brand-strong)] transition hover:bg-white/70"
+              >
                 {currentUser.display_name}
-              </span>
+              </Link>
               <form action={logoutAction}>
                 <button
                   type="submit"

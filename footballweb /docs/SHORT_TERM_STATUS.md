@@ -33,6 +33,7 @@ Ngày cập nhật: 2026-04-15
 - Đổi `getCurrentUser` sang ưu tiên session thật; dev bypass chỉ còn chạy khi có `x-demo-user-*` hoặc `DEV_AUTH_BYPASS_EMAIL`.
 - Cho các page chính như `team/create`, `team/join`, `team/[teamId]`, `matches/[matchId]`, `match/posts/create` redirect về `/login` khi chưa có session.
 - Bổ sung unit test cho auth actions bao gồm cả sendOtpAction và loginAction.
+- Làm mới toàn bộ UI Homepage (`/`), tách thành 2 view độc lập: `GuestLanding` (Landing page giới thiệu với Hero và bảng tính năng nổi bật) và `UserDashboard` (Giao diện bảng tin cá nhân hóa liệt kê đội, lịch đá, và kèo mới nhất).
 
 ## Đã có sẵn từ trước
 

@@ -12,6 +12,7 @@ import {
 
 import { db } from "@/lib/db";
 import { ApiError } from "@/lib/http";
+import { buildTeamFeeSummary, TEAM_FEE_INCLUDE } from "@/features/team-finance";
 import {
   CreateMatchPostInput,
   MatchPostListFilters,
@@ -78,24 +79,47 @@ type MatchPostWithTeamAndMatch = Prisma.MatchPostGetPayload<{
   };
 }>;
 
+const MATCH_INVITATION_INCLUDE = {
+  match_post: {
+    include: {
+      team: {
+        include: {
+          _count: {
+            select: {
+              team_members: true
+            }
+          }
+        }
+      }
+    }
+  },
+  inviter_team: true,
+  target_team: true,
+  _count: {
+    select: {
+      votes: true
+    }
+  },
+  votes: {
+    select: {
+      user_id: true,
+      user: {
+        select: {
+          id: true,
+          display_name: true,
+          avatar_url: true
+        }
+      }
+    },
+    orderBy: [{ created_at: "asc" }]
+  },
+  team_fee: {
+    include: TEAM_FEE_INCLUDE
+  }
+} satisfies Prisma.MatchInvitationInclude;
+
 type MatchInvitationWithRelations = Prisma.MatchInvitationGetPayload<{
-  include: {
-    match_post: {
-      include: {
-        team: {
-          include: {
-            _count: {
-              select: {
-                team_members: true;
-              };
-            };
-          };
-        };
-      };
-    };
-    inviter_team: true;
-    target_team: true;
-  };
+  include: typeof MATCH_INVITATION_INCLUDE;
 }>;
 
 type MatchWithTeams = Prisma.MatchGetPayload<{
@@ -251,19 +275,19 @@ function buildMatchSummary(match: MatchWithTeams) {
     currency_code: match.currency_code,
     home_team: match.home_team
       ? {
-          id: match.home_team.id,
-          name: match.home_team.name,
-          short_code: match.home_team.short_code,
-          logo_url: match.home_team.logo_url
-        }
+        id: match.home_team.id,
+        name: match.home_team.name,
+        short_code: match.home_team.short_code,
+        logo_url: match.home_team.logo_url
+      }
       : null,
     away_team: match.away_team
       ? {
-          id: match.away_team.id,
-          name: match.away_team.name,
-          short_code: match.away_team.short_code,
-          logo_url: match.away_team.logo_url
-        }
+        id: match.away_team.id,
+        name: match.away_team.name,
+        short_code: match.away_team.short_code,
+        logo_url: match.away_team.logo_url
+      }
       : null,
     participant_summary: getParticipantSummary(match.match_participants)
   };
@@ -289,7 +313,14 @@ function buildMatchParticipantSummary(participant: MatchParticipantWithRelations
   };
 }
 
-function buildMatchInvitationSummary(invitation: MatchInvitationWithRelations) {
+function buildMatchInvitationSummary(
+  invitation: MatchInvitationWithRelations,
+  currentUserId?: string,
+  options?: {
+    include_voters?: boolean;
+    include_finance?: boolean;
+  }
+) {
   return {
     id: invitation.id,
     status: invitation.status,
@@ -315,7 +346,44 @@ function buildMatchInvitationSummary(invitation: MatchInvitationWithRelations) {
       name: invitation.target_team.name,
       short_code: invitation.target_team.short_code,
       logo_url: invitation.target_team.logo_url
+    },
+    vote_count: invitation._count?.votes ?? 0,
+    has_voted_by_current_user: currentUserId ? (invitation.votes?.some((v) => v.user_id === currentUserId) ?? false) : false,
+    voters: options?.include_voters
+      ? invitation.votes.map((vote) => ({
+          user_id: vote.user_id,
+          display_name: vote.user.display_name,
+          avatar_url: vote.user.avatar_url
+        }))
+      : [],
+    fee: options?.include_finance && invitation.team_fee ? buildTeamFeeSummary(invitation.team_fee) : null
+  };
+}
+
+async function getInvitationViewerOptions(targetTeamId: string, currentUserId: string) {
+  const membership = await db.teamMember.findUnique({
+    where: {
+      team_id_user_id: {
+        team_id: targetTeamId,
+        user_id: currentUserId
+      }
+    },
+    select: {
+      role: true,
+      status: true
     }
+  });
+
+  if (!membership || membership.status !== TeamMemberStatus.active) {
+    return {
+      include_voters: false,
+      include_finance: false
+    };
+  }
+
+  return {
+    include_voters: true,
+    include_finance: membership.role === TeamRole.captain || membership.role === TeamRole.treasurer
   };
 }
 
@@ -442,19 +510,19 @@ async function requireMatchAccess(matchId: string, currentUserId: string) {
   const [teamMembership, participant] = await Promise.all([
     teamIds.length > 0
       ? db.teamMember.findFirst({
-          where: {
-            user_id: currentUserId,
-            status: TeamMemberStatus.active,
-            team_id: {
-              in: teamIds
-            }
-          },
-          select: {
-            team_id: true,
-            role: true,
-            status: true
+        where: {
+          user_id: currentUserId,
+          status: TeamMemberStatus.active,
+          team_id: {
+            in: teamIds
           }
-        })
+        },
+        select: {
+          team_id: true,
+          role: true,
+          status: true
+        }
+      })
       : Promise.resolve(null),
     db.matchParticipant.findFirst({
       where: {
@@ -489,19 +557,19 @@ async function requireMatchCaptainAccess(matchId: string, currentUserId: string)
     teamIds.length === 0
       ? null
       : await db.teamMember.findFirst({
-          where: {
-            user_id: currentUserId,
-            status: TeamMemberStatus.active,
-            role: TeamRole.captain,
-            team_id: {
-              in: teamIds
-            }
-          },
-          select: {
-            team_id: true,
-            role: true
+        where: {
+          user_id: currentUserId,
+          status: TeamMemberStatus.active,
+          role: TeamRole.captain,
+          team_id: {
+            in: teamIds
           }
-        });
+        },
+        select: {
+          team_id: true,
+          role: true
+        }
+      });
 
   if (!captainMembership) {
     throw new ApiError(403, "FORBIDDEN", "Captain permission is required to manage this match.");
@@ -996,60 +1064,59 @@ export async function createMatchPost(input: CreateMatchPostInput, createdByUser
 }
 
 export async function listMatchPostInvitations(matchPostId: string, currentUserId: string) {
-  const captainMemberships = await db.teamMember.findMany({
-    where: {
-      user_id: currentUserId,
-      status: TeamMemberStatus.active,
-      role: TeamRole.captain
-    },
-    select: {
-      team_id: true
-    }
+  const matchPost = await db.matchPost.findUnique({
+    where: { id: matchPostId },
+    select: { team_id: true }
   });
 
-  if (captainMemberships.length === 0) {
+  if (!matchPost) {
     return [];
   }
 
-  const captainTeamIds = captainMemberships.map((membership) => membership.team_id);
+  const userMemberships = await db.teamMember.findMany({
+    where: {
+      user_id: currentUserId,
+      status: TeamMemberStatus.active
+    },
+    select: {
+      team_id: true,
+      role: true
+    }
+  });
+
+  const captainTeamIds = userMemberships
+    .filter((membership) => membership.role === TeamRole.captain)
+    .map((membership) => membership.team_id);
+  const isHostTeamMember = userMemberships.some((membership) => membership.team_id === matchPost.team_id);
+
+  if (captainTeamIds.length === 0 && !isHostTeamMember) {
+    return [];
+  }
+
+  const orConditions: Prisma.MatchInvitationWhereInput[] = [
+    { inviter_team_id: { in: captainTeamIds } },
+    { target_team_id: { in: captainTeamIds } }
+  ];
+
+  if (isHostTeamMember) {
+    orConditions.push({ target_team_id: matchPost.team_id });
+  }
 
   const invitations = await db.matchInvitation.findMany({
     where: {
       match_post_id: matchPostId,
-      OR: [
-        {
-          inviter_team_id: {
-            in: captainTeamIds
-          }
-        },
-        {
-          target_team_id: {
-            in: captainTeamIds
-          }
-        }
-      ]
+      OR: orConditions
     },
-    include: {
-      match_post: {
-        include: {
-          team: {
-            include: {
-              _count: {
-                select: {
-                  team_members: true
-                }
-              }
-            }
-          }
-        }
-      },
-      inviter_team: true,
-      target_team: true
-    },
+    include: MATCH_INVITATION_INCLUDE,
     orderBy: [{ created_at: "desc" }]
   });
 
-  return invitations.map((invitation) => buildMatchInvitationSummary(invitation));
+  return invitations.map((invitation) =>
+    buildMatchInvitationSummary(invitation, currentUserId, {
+      include_voters: invitation.target_team_id === matchPost.team_id && isHostTeamMember,
+      include_finance: invitation.target_team_id === matchPost.team_id && isHostTeamMember
+    })
+  );
 }
 
 export async function listTeamMatchInvitations(teamId: string, currentUserId: string) {
@@ -1060,53 +1127,21 @@ export async function listTeamMatchInvitations(teamId: string, currentUserId: st
       where: {
         target_team_id: teamId
       },
-      include: {
-        match_post: {
-          include: {
-            team: {
-              include: {
-                _count: {
-                  select: {
-                    team_members: true
-                  }
-                }
-              }
-            }
-          }
-        },
-        inviter_team: true,
-        target_team: true
-      },
+      include: MATCH_INVITATION_INCLUDE,
       orderBy: [{ created_at: "desc" }]
     }),
     db.matchInvitation.findMany({
       where: {
         inviter_team_id: teamId
       },
-      include: {
-        match_post: {
-          include: {
-            team: {
-              include: {
-                _count: {
-                  select: {
-                    team_members: true
-                  }
-                }
-              }
-            }
-          }
-        },
-        inviter_team: true,
-        target_team: true
-      },
+      include: MATCH_INVITATION_INCLUDE,
       orderBy: [{ created_at: "desc" }]
     })
   ]);
 
   return {
-    incoming: incoming.map((invitation) => buildMatchInvitationSummary(invitation)),
-    outgoing: outgoing.map((invitation) => buildMatchInvitationSummary(invitation))
+    incoming: incoming.map((invitation) => buildMatchInvitationSummary(invitation, currentUserId)),
+    outgoing: outgoing.map((invitation) => buildMatchInvitationSummary(invitation, currentUserId))
   };
 }
 
@@ -1161,23 +1196,7 @@ export async function createMatchInvitation(
         in: [MatchInvitationStatus.pending, MatchInvitationStatus.accepted]
       }
     },
-    include: {
-      match_post: {
-        include: {
-          team: {
-            include: {
-              _count: {
-                select: {
-                  team_members: true
-                }
-              }
-            }
-          }
-        }
-      },
-      inviter_team: true,
-      target_team: true
-    },
+    include: MATCH_INVITATION_INCLUDE,
     orderBy: [{ created_at: "desc" }]
   });
 
@@ -1198,23 +1217,7 @@ export async function createMatchInvitation(
         note: input.note,
         created_by: createdByUserId
       },
-      include: {
-        match_post: {
-          include: {
-            team: {
-              include: {
-                _count: {
-                  select: {
-                    team_members: true
-                  }
-                }
-              }
-            }
-          }
-        },
-        inviter_team: true,
-        target_team: true
-      }
+      include: MATCH_INVITATION_INCLUDE
     });
 
     await syncMatchPostStatus(tx, input.match_post_id);
@@ -1222,7 +1225,7 @@ export async function createMatchInvitation(
     return createdInvitation;
   });
 
-  return buildMatchInvitationSummary(invitation);
+  return buildMatchInvitationSummary(invitation, createdByUserId);
 }
 
 async function getInvitationForActor(invitationId: string) {
@@ -1230,23 +1233,7 @@ async function getInvitationForActor(invitationId: string) {
     where: {
       id: invitationId
     },
-    include: {
-      match_post: {
-        include: {
-          team: {
-            include: {
-              _count: {
-                select: {
-                  team_members: true
-                }
-              }
-            }
-          }
-        }
-      },
-      inviter_team: true,
-      target_team: true
-    }
+    include: MATCH_INVITATION_INCLUDE
   });
 
   if (!invitation) {
@@ -1261,7 +1248,7 @@ export async function acceptMatchInvitation(invitationId: string, currentUserId:
   await requireTeamCaptainAccess(invitation.target_team_id, currentUserId);
 
   if (invitation.status === MatchInvitationStatus.accepted) {
-    return buildMatchInvitationSummary(invitation);
+    return buildMatchInvitationSummary(invitation, currentUserId);
   }
 
   if (invitation.status !== MatchInvitationStatus.pending) {
@@ -1279,23 +1266,7 @@ export async function acceptMatchInvitation(invitationId: string, currentUserId:
         status: MatchInvitationStatus.accepted,
         responded_at: now
       },
-      include: {
-        match_post: {
-          include: {
-            team: {
-              include: {
-                _count: {
-                  select: {
-                    team_members: true
-                  }
-                }
-              }
-            }
-          }
-        },
-        inviter_team: true,
-        target_team: true
-      }
+      include: MATCH_INVITATION_INCLUDE
     });
 
     await tx.matchInvitation.updateMany({
@@ -1319,7 +1290,10 @@ export async function acceptMatchInvitation(invitationId: string, currentUserId:
     return acceptedInvitation;
   });
 
-  return buildMatchInvitationSummary(result);
+  return buildMatchInvitationSummary(result, currentUserId, {
+    include_voters: true,
+    include_finance: true
+  });
 }
 
 export async function rejectMatchInvitation(invitationId: string, currentUserId: string) {
@@ -1327,7 +1301,7 @@ export async function rejectMatchInvitation(invitationId: string, currentUserId:
   await requireTeamCaptainAccess(invitation.target_team_id, currentUserId);
 
   if (invitation.status === MatchInvitationStatus.rejected) {
-    return buildMatchInvitationSummary(invitation);
+    return buildMatchInvitationSummary(invitation, currentUserId);
   }
 
   if (invitation.status !== MatchInvitationStatus.pending) {
@@ -1343,23 +1317,7 @@ export async function rejectMatchInvitation(invitationId: string, currentUserId:
         status: MatchInvitationStatus.rejected,
         responded_at: new Date()
       },
-      include: {
-        match_post: {
-          include: {
-            team: {
-              include: {
-                _count: {
-                  select: {
-                    team_members: true
-                  }
-                }
-              }
-            }
-          }
-        },
-        inviter_team: true,
-        target_team: true
-      }
+      include: MATCH_INVITATION_INCLUDE
     });
 
     await syncMatchPostStatus(tx, invitation.match_post_id);
@@ -1367,7 +1325,10 @@ export async function rejectMatchInvitation(invitationId: string, currentUserId:
     return rejectedInvitation;
   });
 
-  return buildMatchInvitationSummary(result);
+  return buildMatchInvitationSummary(result, currentUserId, {
+    include_voters: true,
+    include_finance: true
+  });
 }
 
 export async function cancelMatchInvitation(invitationId: string, currentUserId: string) {
@@ -1375,7 +1336,7 @@ export async function cancelMatchInvitation(invitationId: string, currentUserId:
   await requireTeamCaptainAccess(invitation.inviter_team_id, currentUserId);
 
   if (invitation.status === MatchInvitationStatus.cancelled) {
-    return buildMatchInvitationSummary(invitation);
+    return buildMatchInvitationSummary(invitation, currentUserId);
   }
 
   if (invitation.status !== MatchInvitationStatus.pending) {
@@ -1391,23 +1352,7 @@ export async function cancelMatchInvitation(invitationId: string, currentUserId:
         status: MatchInvitationStatus.cancelled,
         responded_at: new Date()
       },
-      include: {
-        match_post: {
-          include: {
-            team: {
-              include: {
-                _count: {
-                  select: {
-                    team_members: true
-                  }
-                }
-              }
-            }
-          }
-        },
-        inviter_team: true,
-        target_team: true
-      }
+      include: MATCH_INVITATION_INCLUDE
     });
 
     await syncMatchPostStatus(tx, invitation.match_post_id);
@@ -1415,5 +1360,84 @@ export async function cancelMatchInvitation(invitationId: string, currentUserId:
     return cancelledInvitation;
   });
 
-  return buildMatchInvitationSummary(result);
+  return buildMatchInvitationSummary(result, currentUserId);
+}
+
+export async function voteForMatchInvitation(invitationId: string, currentUserId: string) {
+  const invitation = await getInvitationForActor(invitationId);
+  await requireTeamPostingAccess(invitation.match_post.team.id, currentUserId);
+  const viewerOptions = await getInvitationViewerOptions(invitation.target_team_id, currentUserId);
+
+  if (
+    invitation.status === MatchInvitationStatus.cancelled ||
+    invitation.status === MatchInvitationStatus.rejected
+  ) {
+    throw new ApiError(400, "VALIDATION_ERROR", "Không thể vote cho lời mời đã bị hủy hoặc từ chối.");
+  }
+
+  const existingVote = await db.matchInvitationVote.findUnique({
+    where: {
+      invitation_id_user_id: {
+        invitation_id: invitationId,
+        user_id: currentUserId
+      }
+    }
+  });
+
+  if (!existingVote) {
+    await db.matchInvitationVote.create({
+      data: {
+        invitation_id: invitationId,
+        user_id: currentUserId
+      }
+    });
+  }
+
+  const updatedInvitation = await db.matchInvitation.findUnique({
+    where: { id: invitationId },
+    include: MATCH_INVITATION_INCLUDE
+  });
+
+  if (!updatedInvitation) {
+    throw new ApiError(404, "NOT_FOUND", "Match invitation not found.");
+  }
+
+  return buildMatchInvitationSummary(updatedInvitation, currentUserId, viewerOptions);
+}
+
+export async function removeMatchInvitationVote(invitationId: string, currentUserId: string) {
+  const invitation = await getInvitationForActor(invitationId);
+  await requireTeamPostingAccess(invitation.match_post.team.id, currentUserId);
+  const viewerOptions = await getInvitationViewerOptions(invitation.target_team_id, currentUserId);
+
+  const existingVote = await db.matchInvitationVote.findUnique({
+    where: {
+      invitation_id_user_id: {
+        invitation_id: invitationId,
+        user_id: currentUserId
+      }
+    }
+  });
+
+  if (existingVote) {
+    await db.matchInvitationVote.delete({
+      where: {
+        invitation_id_user_id: {
+          invitation_id: invitationId,
+          user_id: currentUserId
+        }
+      }
+    });
+  }
+
+  const updatedInvitation = await db.matchInvitation.findUnique({
+    where: { id: invitationId },
+    include: MATCH_INVITATION_INCLUDE
+  });
+
+  if (!updatedInvitation) {
+    throw new ApiError(404, "NOT_FOUND", "Match invitation not found.");
+  }
+
+  return buildMatchInvitationSummary(updatedInvitation, currentUserId, viewerOptions);
 }

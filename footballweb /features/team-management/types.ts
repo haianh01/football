@@ -1,3 +1,6 @@
+import type { TeamFeeSummary } from "@/features/team-finance";
+import type { MatchInvitationDashboardItem } from "@/features/matchmaking/types";
+
 export type TeamInviteSummary = {
   id: string;
   team_id: string;
@@ -35,6 +38,51 @@ export type TeamDashboardMember = {
   current_debt_amount_minor: number;
   currency_code: string;
   joined_at: string;
+};
+
+export type TeamDashboardUpcomingMatch = {
+  id: string;
+  source_match_post_id: string | null;
+  status: "scheduled" | "confirmed" | "completed" | "cancelled";
+  date: string;
+  start_time: string;
+  end_time: string | null;
+  venue_name: string | null;
+  field_type: "five" | "seven" | "eleven";
+  home_team: {
+    id: string;
+    name: string;
+    short_code: string;
+    logo_url: string | null;
+  } | null;
+  away_team: {
+    id: string;
+    name: string;
+    short_code: string;
+    logo_url: string | null;
+  } | null;
+  current_team_available_count: number;
+  current_team_required_players: number;
+  current_team_shortage: number;
+};
+
+export type TeamDashboard = {
+  team_summary: TeamSummary;
+  action_center: {
+    pending_confirmations: number;
+    open_polls: number;
+    overdue_fee_assignees: number;
+    upcoming_match_shortage: number;
+  };
+  upcoming_matches: TeamDashboardUpcomingMatch[];
+  pending_match_invitations: MatchInvitationDashboardItem[];
+  open_polls: [];
+  open_fees: TeamFeeSummary[];
+  member_summary: {
+    active_members: number;
+    average_attendance_rate: number;
+  };
+  members: TeamDashboardMember[];
 };
 
 export type ApiSuccess<T> = {

@@ -29,7 +29,6 @@ export default async function MatchPostsPage({
 }) {
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const q = typeof resolvedSearchParams?.q === "string" ? resolvedSearchParams.q : undefined;
-  const city_code = typeof resolvedSearchParams?.city_code === "string" ? resolvedSearchParams.city_code : undefined;
   const field_type =
     typeof resolvedSearchParams?.field_type === "string" &&
     ["five", "seven", "eleven"].includes(resolvedSearchParams.field_type)
@@ -38,7 +37,6 @@ export default async function MatchPostsPage({
 
   const matchPosts = await listMatchPosts({
     q,
-    city_code,
     field_type
   });
 
@@ -73,19 +71,12 @@ export default async function MatchPostsPage({
           </div>
         </div>
 
-        <form className="mt-6 grid gap-3 rounded-3xl bg-[var(--card-muted)] p-4 md:grid-cols-[1.4fr_0.8fr_0.8fr_auto]">
+        <form className="mt-6 grid gap-3 rounded-3xl bg-[var(--card-muted)] p-4 md:grid-cols-[1.6fr_0.9fr_auto]">
           <input
             type="text"
             name="q"
             defaultValue={q}
             placeholder="Tìm tên đội, sân hoặc khu vực..."
-            className="rounded-2xl border border-black/8 bg-white px-4 py-3 text-sm text-[var(--brand-strong)] outline-none transition focus:border-[var(--brand)]"
-          />
-          <input
-            type="text"
-            name="city_code"
-            defaultValue={city_code}
-            placeholder="Mã thành phố"
             className="rounded-2xl border border-black/8 bg-white px-4 py-3 text-sm text-[var(--brand-strong)] outline-none transition focus:border-[var(--brand)]"
           />
           <select
@@ -147,7 +138,7 @@ export default async function MatchPostsPage({
                 <div className="rounded-3xl bg-[var(--card-muted)] p-4">
                   <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--brand)]">Địa điểm</p>
                   <p className="mt-2 text-sm font-semibold text-[var(--brand-strong)]">
-                    {matchPost.venue_name || "Chưa chốt sân"} • {matchPost.city_code || "N/A"}
+                    {matchPost.venue_name || matchPost.district_code || "Chưa chốt địa điểm"}
                   </p>
                 </div>
                 <div className="rounded-3xl bg-[var(--card-muted)] p-4">

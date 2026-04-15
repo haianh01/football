@@ -20,16 +20,19 @@ model User {
   created_at       DateTime   @default(now()) @db.Timestamptz(6)
   updated_at       DateTime   @updatedAt @db.Timestamptz(6)
 
-  user_identities            UserIdentity[]
-  user_preferences           UserPreference?
-  created_teams              Team[]       @relation("team_created_by")
-  team_members               TeamMember[]
-  target_user_team_invites   TeamInvite[] @relation("team_invite_target_user")
-  created_team_invites       TeamInvite[] @relation("team_invite_created_by")
-  created_match_posts        MatchPost[]  @relation("match_post_created_by")
-  created_match_invitations  MatchInvitation[] @relation("match_invitation_created_by")
-  created_matches            Match[]      @relation("match_created_by")
-  match_participants         MatchParticipant[]
+  user_identities           UserIdentity[]
+  user_preferences          UserPreference?
+  created_teams             Team[]                @relation("team_created_by")
+  team_members              TeamMember[]
+  target_user_team_invites  TeamInvite[]          @relation("team_invite_target_user")
+  created_team_invites      TeamInvite[]          @relation("team_invite_created_by")
+  created_match_posts       MatchPost[]           @relation("match_post_created_by")
+  created_match_invitations MatchInvitation[]     @relation("match_invitation_created_by")
+  created_matches           Match[]               @relation("match_created_by")
+  match_participants        MatchParticipant[]
+  match_invitation_votes    MatchInvitationVote[]
+  created_team_fees         TeamFee[]             @relation("team_fee_created_by")
+  team_fee_assignees        TeamFeeAssignee[]
 
   @@index([status, created_at], map: "idx_users_status_created")
   @@map("users")
@@ -82,15 +85,16 @@ model Team {
   created_at         DateTime       @default(now()) @db.Timestamptz(6)
   updated_at         DateTime       @updatedAt @db.Timestamptz(6)
 
-  created_by_user User         @relation("team_created_by", fields: [created_by], references: [id], onDelete: Restrict)
-  team_members    TeamMember[]
-  team_invites    TeamInvite[]
-  match_posts     MatchPost[]
-  sent_match_invitations MatchInvitation[] @relation("match_invitation_inviter_team")
-  received_match_invitations MatchInvitation[] @relation("match_invitation_target_team")
-  home_matches Match[] @relation("match_home_team")
-  away_matches Match[] @relation("match_away_team")
-  match_participants MatchParticipant[]
+  created_by_user            User               @relation("team_created_by", fields: [created_by], references: [id], onDelete: Restrict)
+  team_members               TeamMember[]
+  team_invites               TeamInvite[]
+  match_posts                MatchPost[]
+  sent_match_invitations     MatchInvitation[]  @relation("match_invitation_inviter_team")
+  received_match_invitations MatchInvitation[]  @relation("match_invitation_target_team")
+  home_matches               Match[]            @relation("match_home_team")
+  away_matches               Match[]            @relation("match_away_team")
+  match_participants         MatchParticipant[]
+  team_fees                  TeamFee[]
 
   @@index([home_city_code, skill_level_code], map: "idx_teams_city_skill")
   @@index([created_by, created_at], map: "idx_teams_created_by_created")
@@ -146,38 +150,38 @@ model TeamInvite {
 }
 
 model MatchPost {
-  id               String          @id @default(uuid()) @db.Uuid
-  team_id          String          @db.Uuid
-  title            String?         @db.VarChar(160)
-  match_type       MatchType       @default(friendly)
-  status           MatchPostStatus @default(open)
-  urgency          UrgencyLevel    @default(normal)
-  date             DateTime        @db.Date
-  start_time       DateTime        @db.Time(6)
-  end_time         DateTime?       @db.Time(6)
-  timezone         String          @default("Asia/Ho_Chi_Minh") @db.VarChar(64)
-  country_code     String          @default("VN") @db.VarChar(2)
-  state_code       String?         @db.VarChar(64)
-  city_code        String?         @db.VarChar(64)
-  district_code    String?         @db.VarChar(64)
-  venue_name       String?         @db.VarChar(160)
-  venue_address    String?
-  field_type       FieldType
-  team_skill_min   SkillLevelCode
-  team_skill_max   SkillLevelCode
-  pitch_fee_rule   PitchFeeRule
-  support_note     String?         @db.VarChar(160)
-  currency_code    String          @default("VND") @db.VarChar(3)
-  note             String?
-  expires_at       DateTime?       @db.Timestamptz(6)
-  created_by       String          @db.Uuid
-  created_at       DateTime        @default(now()) @db.Timestamptz(6)
-  updated_at       DateTime        @updatedAt @db.Timestamptz(6)
+  id             String          @id @default(uuid()) @db.Uuid
+  team_id        String          @db.Uuid
+  title          String?         @db.VarChar(160)
+  match_type     MatchType       @default(friendly)
+  status         MatchPostStatus @default(open)
+  urgency        UrgencyLevel    @default(normal)
+  date           DateTime        @db.Date
+  start_time     DateTime        @db.Time(6)
+  end_time       DateTime?       @db.Time(6)
+  timezone       String          @default("Asia/Ho_Chi_Minh") @db.VarChar(64)
+  country_code   String          @default("VN") @db.VarChar(2)
+  state_code     String?         @db.VarChar(64)
+  city_code      String?         @db.VarChar(64)
+  district_code  String?         @db.VarChar(64)
+  venue_name     String?         @db.VarChar(160)
+  venue_address  String?
+  field_type     FieldType
+  team_skill_min SkillLevelCode
+  team_skill_max SkillLevelCode
+  pitch_fee_rule PitchFeeRule
+  support_note   String?         @db.VarChar(160)
+  currency_code  String          @default("VND") @db.VarChar(3)
+  note           String?
+  expires_at     DateTime?       @db.Timestamptz(6)
+  created_by     String          @db.Uuid
+  created_at     DateTime        @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime        @updatedAt @db.Timestamptz(6)
 
-  team            Team @relation(fields: [team_id], references: [id], onDelete: Restrict)
-  created_by_user User @relation("match_post_created_by", fields: [created_by], references: [id], onDelete: Restrict)
+  team              Team              @relation(fields: [team_id], references: [id], onDelete: Restrict)
+  created_by_user   User              @relation("match_post_created_by", fields: [created_by], references: [id], onDelete: Restrict)
   match_invitations MatchInvitation[]
-  scheduled_match Match? @relation("match_source_post")
+  scheduled_match   Match?            @relation("match_source_post")
 
   @@index([status, city_code, date, field_type], map: "idx_match_posts_discovery")
   @@index([team_id, status, created_at], map: "idx_match_posts_team_status_created")
@@ -187,27 +191,42 @@ model MatchPost {
 }
 
 model MatchInvitation {
-  id             String                @id @default(uuid()) @db.Uuid
-  match_post_id  String                @db.Uuid
-  inviter_team_id String               @db.Uuid
-  target_team_id String                @db.Uuid
-  status         MatchInvitationStatus @default(pending)
-  note           String?               @db.VarChar(240)
-  responded_at   DateTime?             @db.Timestamptz(6)
-  created_by     String                @db.Uuid
-  created_at     DateTime              @default(now()) @db.Timestamptz(6)
-  updated_at     DateTime              @updatedAt @db.Timestamptz(6)
+  id              String                @id @default(uuid()) @db.Uuid
+  match_post_id   String                @db.Uuid
+  inviter_team_id String                @db.Uuid
+  target_team_id  String                @db.Uuid
+  status          MatchInvitationStatus @default(pending)
+  note            String?               @db.VarChar(240)
+  responded_at    DateTime?             @db.Timestamptz(6)
+  created_by      String                @db.Uuid
+  created_at      DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime              @updatedAt @db.Timestamptz(6)
 
-  match_post       MatchPost @relation(fields: [match_post_id], references: [id], onDelete: Cascade)
-  inviter_team     Team      @relation("match_invitation_inviter_team", fields: [inviter_team_id], references: [id], onDelete: Restrict)
-  target_team      Team      @relation("match_invitation_target_team", fields: [target_team_id], references: [id], onDelete: Restrict)
-  created_by_user  User      @relation("match_invitation_created_by", fields: [created_by], references: [id], onDelete: Restrict)
+  match_post      MatchPost             @relation(fields: [match_post_id], references: [id], onDelete: Cascade)
+  inviter_team    Team                  @relation("match_invitation_inviter_team", fields: [inviter_team_id], references: [id], onDelete: Restrict)
+  target_team     Team                  @relation("match_invitation_target_team", fields: [target_team_id], references: [id], onDelete: Restrict)
+  created_by_user User                  @relation("match_invitation_created_by", fields: [created_by], references: [id], onDelete: Restrict)
+  votes           MatchInvitationVote[]
+  team_fee        TeamFee?
 
   @@index([match_post_id, status], map: "idx_match_invitations_post_status")
   @@index([target_team_id, status], map: "idx_match_invitations_target_status")
   @@index([inviter_team_id, status], map: "idx_match_invitations_inviter_status")
   @@index([created_by, created_at], map: "idx_match_invitations_created_by_created")
   @@map("match_invitations")
+}
+
+model MatchInvitationVote {
+  id            String   @id @default(uuid()) @db.Uuid
+  invitation_id String   @db.Uuid
+  user_id       String   @db.Uuid
+  created_at    DateTime @default(now()) @db.Timestamptz(6)
+
+  invitation MatchInvitation @relation(fields: [invitation_id], references: [id], onDelete: Cascade)
+  user       User            @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([invitation_id, user_id])
+  @@map("match_invitation_votes")
 }
 
 model Match {
@@ -238,10 +257,10 @@ model Match {
   created_at           DateTime    @default(now()) @db.Timestamptz(6)
   updated_at           DateTime    @updatedAt @db.Timestamptz(6)
 
-  source_match_post MatchPost? @relation("match_source_post", fields: [source_match_post_id], references: [id], onDelete: SetNull)
-  home_team         Team?      @relation("match_home_team", fields: [home_team_id], references: [id], onDelete: SetNull)
-  away_team         Team?      @relation("match_away_team", fields: [away_team_id], references: [id], onDelete: SetNull)
-  created_by_user   User       @relation("match_created_by", fields: [created_by], references: [id], onDelete: Restrict)
+  source_match_post  MatchPost?         @relation("match_source_post", fields: [source_match_post_id], references: [id], onDelete: SetNull)
+  home_team          Team?              @relation("match_home_team", fields: [home_team_id], references: [id], onDelete: SetNull)
+  away_team          Team?              @relation("match_away_team", fields: [away_team_id], references: [id], onDelete: SetNull)
+  created_by_user    User               @relation("match_created_by", fields: [created_by], references: [id], onDelete: Restrict)
   match_participants MatchParticipant[]
 
   @@index([home_team_id, date], map: "idx_matches_home_team_date")
@@ -274,6 +293,52 @@ model MatchParticipant {
   @@index([user_id, attendance_status], map: "idx_match_participants_user_attendance")
   @@index([team_id, attendance_status], map: "idx_match_participants_team_attendance")
   @@map("match_participants")
+}
+
+model TeamFee {
+  id                  String              @id @default(uuid()) @db.Uuid
+  team_id             String              @db.Uuid
+  match_invitation_id String?             @unique @db.Uuid
+  title               String              @db.VarChar(160)
+  description         String?
+  fee_type            FeeType
+  distribution_type   FeeDistributionType
+  currency_code       String              @default("VND") @db.VarChar(3)
+  total_amount_minor  BigInt
+  due_at              DateTime            @db.Timestamptz(6)
+  status              TeamFeeStatus       @default(open)
+  created_by          String              @db.Uuid
+  created_at          DateTime            @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime            @updatedAt @db.Timestamptz(6)
+
+  team             Team             @relation(fields: [team_id], references: [id], onDelete: Cascade)
+  match_invitation MatchInvitation? @relation(fields: [match_invitation_id], references: [id], onDelete: SetNull)
+  created_by_user  User             @relation("team_fee_created_by", fields: [created_by], references: [id], onDelete: Restrict)
+  assignees        TeamFeeAssignee[]
+
+  @@index([team_id, status, due_at], map: "idx_team_fees_team_status_due")
+  @@map("team_fees")
+}
+
+model TeamFeeAssignee {
+  id                String        @id @default(uuid()) @db.Uuid
+  team_fee_id       String        @db.Uuid
+  user_id           String        @db.Uuid
+  amount_due_minor  BigInt
+  amount_paid_minor BigInt        @default(0)
+  payment_status    PaymentStatus @default(pending)
+  paid_at           DateTime?     @db.Timestamptz(6)
+  request_count     Int           @default(0)
+  last_requested_at DateTime?     @db.Timestamptz(6)
+  created_at        DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime      @updatedAt @db.Timestamptz(6)
+
+  team_fee TeamFee @relation(fields: [team_fee_id], references: [id], onDelete: Cascade)
+  user     User    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([team_fee_id, user_id])
+  @@index([user_id, payment_status], map: "idx_team_fee_assignees_user_status")
+  @@map("team_fee_assignees")
 }
 
 enum UserStatus {
@@ -410,6 +475,36 @@ enum PitchFeeRule {
   home_team_pays
   away_team_pays
   sponsor_supported
+}
+
+enum FeeType {
+  pitch
+  tournament
+  monthly_fund
+  jersey
+  other
+}
+
+enum FeeDistributionType {
+  fixed_per_member
+  split_even
+  custom_amounts
+}
+
+enum TeamFeeStatus {
+  open
+  partially_paid
+  paid
+  overdue
+  cancelled
+}
+
+enum PaymentStatus {
+  pending
+  paid
+  overdue
+  waived
+  partially_paid
 }
 
 model OtpCode {

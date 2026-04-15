@@ -144,6 +144,29 @@ export default async function MatchDetailPage({
 
         {canManageMatch ? <MatchLifecyclePanel matchId={match.id} initialMatch={match} /> : null}
 
+        {match.source_match_post_id ? (
+          <section className="mt-6 surface-card rounded-[2rem] p-6">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--brand)]">Thu Tiền</p>
+            <div className="mt-3 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="max-w-3xl">
+                <h2 className="font-[var(--font-headline)] text-2xl font-extrabold text-[var(--brand-strong)]">
+                  Khu vực thu tiền không nằm ở màn hình này
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-[var(--ink-soft)]">
+                  Bạn đang ở trang quản lý fixture và chốt kết quả của trận đã tạo. Phần tạo khoản thu và xác nhận ai đã đóng
+                  tiền nằm ở <strong>kèo gốc</strong> của trận này.
+                </p>
+              </div>
+              <Link
+                href={`/match/posts/${match.source_match_post_id}#team-finance`}
+                className="inline-flex rounded-2xl bg-[var(--brand)] px-5 py-3 text-sm font-semibold text-white transition hover:translate-y-[-1px]"
+              >
+                Mở khu vực thu tiền
+              </Link>
+            </div>
+          </section>
+        ) : null}
+
         {showRecap ? (
           <section className="mt-6 surface-card rounded-[2rem] p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
